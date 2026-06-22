@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Std_Lower_Teeth
+  m_Shader: {fileID: 4800000, guid: ccacc1000000000000000000000000a2, type: 3}
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _DISABLE_SSR_TRANSPARENT
+  m_LightmapFlags: 0
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap:
+    MotionVector: User
+  disabledShaderPasses:
+  - TransparentDepthPrepass
+  - TransparentDepthPostpass
+  - TransparentBackface
+  - RayTracingPrepass
+  - MOTIONVECTORS
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _DiffuseMap:
+        m_Texture: {fileID: 2800000, guid: 6eef9b9c2de6ede4bb212fdd21215ed6, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _GradientAOMap:
+        m_Texture: {fileID: 2800000, guid: 2b3fca93b06820e48bb91be0b5fec939, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _GumsMaskMap:
+        m_Texture: {fileID: 2800000, guid: 2eeda6613082cda4092305010eb14574, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MaskMap:
+        m_Texture: {fileID: 2800000, guid: cf8b358897610c449ac1a7e6caf27674, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MicroNormalMap:
+        m_Texture: {fileID: 2800000, guid: 232e363206fc254449875352784a1802, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: fe25ba1a061e74b45818f2e89e84dbe1, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _texcoord:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AOStrength: 1
+    - _FrontAO: 1
+    - _GumsBrightness: 0.696
+    - _GumsSSS: 1
+    - _GumsSaturation: 0.61300004
+    - _GumsThickness: 0.3
+    - _IsUpperTeeth: 0
+    - _MicroNormalStrength: 0.3
+    - _MicroNormalTiling: 10
+    - _NormalStrength: 0.5
+    - _RearAO: 0.335
+    - _SmoothnessFront: 0.4181491
+    - _SmoothnessMax: 0.88
+    - _SmoothnessPower: 0.75
+    - _SmoothnessRear: 0
+    - _TeethBrightness: 0.6
+    - _TeethSSS: 0.7
+    - _TeethSaturation: 1
+    - _TeethThickness: 0.3
+    - _TransAmbient: 0.2
+    - _TransDirect: 1
+    - _TransNormalDistortion: 0.95
+    - _TransScattering: 2
+    - _TransShadow: 0.9
+    - _Translucency: 3
+    - __dirty: 0
+    m_Colors:
+    - _EmissiveColor: {r: 0, g: 0, b: 0, a: 0}
+    - _SubsurfaceFalloff: {r: 0.6509804, g: 0.4823529, b: 0.39607838, a: 0}
+  m_BuildTextureStacks: []
