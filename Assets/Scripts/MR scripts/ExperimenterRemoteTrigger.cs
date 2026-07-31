@@ -42,7 +42,7 @@ public class ExperimenterRemoteTrigger : MonoBehaviour
     public AgentVoiceController voiceController;
 
     [Tooltip("Auto-detected via FindObjectOfType if not assigned.")]
-    public AvatarDeskPlacer avatarPlacer;
+    public AvatarPlacer avatarPlacer;
 
     [Header("Session Keep-Alive")]
     [Tooltip("Automatically send activity pings during passive phase to prevent timeout.")]
@@ -74,7 +74,7 @@ public class ExperimenterRemoteTrigger : MonoBehaviour
             voiceController = FindObjectOfType<AgentVoiceController>();
 
         if (avatarPlacer == null)
-            avatarPlacer = FindObjectOfType<AvatarDeskPlacer>();
+            avatarPlacer = FindObjectOfType<AvatarPlacer>();
 
         if (elevenLabs == null)
         {
@@ -87,7 +87,7 @@ public class ExperimenterRemoteTrigger : MonoBehaviour
             Debug.LogWarning("ExperimenterRemoteTrigger: No AgentVoiceController found. MIC commands will be unavailable.");
 
         if (avatarPlacer == null)
-            Debug.LogWarning("ExperimenterRemoteTrigger: No AvatarDeskPlacer found. GAZE commands will be unavailable.");
+            Debug.LogWarning("ExperimenterRemoteTrigger: No AvatarPlacer found. GAZE commands will be unavailable.");
 
         LogDeviceIP();
         StartListener();
@@ -324,7 +324,7 @@ public class ExperimenterRemoteTrigger : MonoBehaviour
     {
         if (avatarPlacer == null)
         {
-            SendReply("ERROR: No AvatarDeskPlacer found");
+            SendReply("ERROR: No AvatarPlacer found");
             return;
         }
 

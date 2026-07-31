@@ -9,6 +9,7 @@ public class EmoterController : MonoBehaviour
     [HideInInspector] public UnityEvent emoterEventThinking;
     [HideInInspector] public UnityEvent waveAnim;
     [HideInInspector] public UnityEvent gestureAnim;
+    [HideInInspector] public UnityEvent gesture2Anim;
     [HideInInspector] public UnityEvent headnodAnim;
     public emoteDriver emoteInvoke;
     public animDriver animatorCtrl;
@@ -19,6 +20,9 @@ public class EmoterController : MonoBehaviour
     {
         gestureAnim.AddListener(TriggerGestureAnim);
         Debug.Log("Gesture Trigger Event Listener Added");
+
+        gesture2Anim.AddListener(TriggerGesture2Anim);
+        Debug.Log("Gesture 2 Trigger Event Listener Added");
 
         headnodAnim.AddListener(TriggerHeadNodAnim);
         Debug.Log("Head Nod Trigger Event Listener Added");
@@ -45,6 +49,12 @@ public class EmoterController : MonoBehaviour
     {
         animatorCtrl.GestureAnim();
         Debug.Log("TriggerGestureAnim triggered");
+    }
+
+    public void TriggerGesture2Anim()
+    {
+        animatorCtrl.Gesture2Anim();
+        Debug.Log("TriggerGesture2Anim triggered");
     }
 
     public void TriggerHeadNodAnim()

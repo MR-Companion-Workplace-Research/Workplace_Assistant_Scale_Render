@@ -64,13 +64,14 @@ Shader "QuestOcclusion/StandardOccluded"
         #pragma surface surf Standard fullforwardshadows
         #pragma target 3.0
 
-        // Material-driven feature keywords (match Unity Standard). Metallic/normal
-        // are sampled unconditionally below (all 5 mats assign those maps), so they
-        // are NOT keyword-gated -> robust to the text-edit shader reassignment.
+        // Material-driven feature keywords (match Unity Standard). The metallic/gloss
+        // map is keyword-gated (see surf) so materials WITHOUT one fall back to the
+        // scalar _Metallic/_Glossiness instead of sampling the "white" default.
         #pragma shader_feature_local _ALPHATEST_ON
         #pragma shader_feature_local _EMISSION
         #pragma shader_feature_local _SPECULARHIGHLIGHTS_OFF
         #pragma shader_feature_local _GLOSSYREFLECTIONS_OFF
+        #pragma shader_feature_local _METALLICGLOSSMAP
 
         // Meta Quest environment-depth occlusion.
         #pragma multi_compile _ HARD_OCCLUSION SOFT_OCCLUSION
@@ -113,11 +114,20 @@ Shader "QuestOcclusion/StandardOccluded"
 
             o.Albedo = c.rgb;
 
-            // Metallic + smoothness from the gloss map (all materials assign one;
-            // _SmoothnessTextureChannel = 0 -> smoothness from metallic map alpha).
-            fixed4 mg = tex2D(_MetallicGlossMap, IN.uv_MainTex);
-            o.Metallic = mg.r;
-            o.Smoothness = mg.a * _GlossMapScale;
+            // Metallic + smoothness: use the gloss map ONLY when the material actually
+            // assigns one (keyword set), exactly like Unity Standard. Plain-export CC
+            // materials (skin/body/teeth/etc.) have NO _MetallicGlossMap -> an
+            // unconditional sample reads the "white" default (metallic=1, smoothness=1)
+            // and the surface renders as chrome/mirror (looks metallic + see-through over
+            // passthrough). Fall back to the scalar _Metallic / _Glossiness in that case.
+            #if defined(_METALLICGLOSSMAP)
+                fixed4 mg = tex2D(_MetallicGlossMap, IN.uv_MainTex);
+                o.Metallic = mg.r;
+                o.Smoothness = mg.a * _GlossMapScale;
+            #else
+                o.Metallic = _Metallic;
+                o.Smoothness = _Glossiness;
+            #endif
 
             // Normal map (unassigned _BumpMap defaults to flat "bump" -> no-op).
             o.Normal = UnpackScaleNormal(tex2D(_BumpMap, IN.uv_MainTex), _BumpScale);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.WebSockets;
@@ -19,7 +19,7 @@ using Newtonsoft.Json.Linq;
 /// 2. Set your Agent ID (from ElevenLabs dashboard).
 /// 3. Set taskContext BEFORE calling Connect() (your experiment controller
 ///    assigns it per trial from a TASK_BLOCKS dictionary).
-/// 4. Call Connect() to start (auto-called by AvatarDeskPlacer).
+/// 4. Call Connect() to start (auto-called by AvatarPlacer).
 /// </summary>
 public class ElevenLabsConnection : MonoBehaviour
 {
@@ -85,61 +85,30 @@ public class ElevenLabsConnection : MonoBehaviour
 
     private static readonly Dictionary<string, string> TASK_BLOCKS = new Dictionary<string, string>
     {
+        // Chinese (zh-TW) study build. Source: swot_chinese.md.
+        // Written in the FIRST person (我被要求…) because this text is what the participant's
+        // side of the scenario looks like TO THE AGENT — the agent IS the AI workplace
+        // assistant, so the source doc's closing "你尋求AI 職場助理的協助…" line is dropped.
+        // CJK strings are kept on ONE line each: splitting them across concatenated lines
+        // risks silently inserting/losing a space inside a run of Chinese characters.
+
         // ============ LOW RISK / LOW REWARD ============
-        ["low_A"]  = "I've been asked to prepare a short internal report requesting a $500 reallocation " +
-            "from the underused Q3 event planning budget to purchase replacement chairs for the 3rd floor " +
-            "meeting room. The report should document the problem statement, confirm funding availability, " +
-            "and facilitate quick approval. The problem statement should include information about any recent " +
-            "maintenance requests and recommend a potential vendor. While not an urgent safety concern, the " +
-            "situation affects comfort and professionalism during cross-team collaboration.",
+        ["low_A"]  = "我被要求準備一份報告，申請 NT$16,000 採購會議室的替換座椅，用於三樓會議室。雖然這並非緊急的安全問題，但該提案可以改善跨團隊合作時的舒適度與專業形象。",
 
-        ["low_B"]  = "I've been asked to prepare a report requesting $800 to restock the shared printer supply " +
-            "cabinet. The report should include a problem statement, identify the most cost-effective vendor, " +
-            "and show that the expense can be covered under the office supply budget. The problem statement " +
-            "should include information about any recent maintenance requests and recommend a potential vendor. " +
-            "While necessary for daily operations, the request is routine and unlikely to face any pushback.",
+        ["low_B"]  = "我被要求準備一份報告，申請 NT$25,600 補充共用印表機及碳粉耗材。但該提案屬於例行性質且為日常營運所需，不太可能遭遇反對。",
 
-        ["low_C"]  = "I've been asked to prepare a brief report requesting $1,200 from the facilities budget to " +
-            "replace the worn coffee machine in the employee lounge. The report should include a problem " +
-            "statement, confirm warranty expiration, and verify cost coverage. The problem statement should " +
-            "include information about any recent maintenance requests and recommend a potential vendor. " +
-            "While appreciated by staff, the decision carries minimal consequence for broader operations.",
+        ["low_C"]  = "我被要求準備一份簡要報告，從設施預算中申請 NT$38,400 以更換員工休息室中老舊的咖啡機。雖然更換咖啡機受到員工支持，但該提案對更廣泛的營運影響有限。",
 
-        ["low_D"]  = "I've been asked to draft a report requesting $1,500 to replace damaged whiteboards in two " +
-            "conference rooms. The report should include a problem statement, confirm budget coverage, and " +
-            "provide vendor options. The problem statement should include information about any recent " +
-            "maintenance requests and recommend a potential vendor. While helpful for meetings, the request is " +
-            "small in scope and unlikely to be controversial.",
+        ["low_D"]  = "我被要求寫一份報告，申請 NT$48,000 更換兩間會議室中損壞的白板。該提案規模較小，不太可能引起爭議。",
 
         // ============ HIGH RISK / HIGH REWARD ============
-        ["high_E"] = "I've been asked to prepare a justification report requesting $2 million in funding for an " +
-            "initiative to streamline enterprise client onboarding. The report should include a problem statement " +
-            "and must present a strong financial and strategic case to secure executive approval. The problem " +
-            "statement should include information about reduction in onboarding time and potential return on " +
-            "investment. Success would reduce time-to-revenue, improve customer retention, and significantly " +
-            "advance both the project and my team's career progression.",
+        ["high_E"] = "我被要求準備一份說明報告，申請 NT$6,400 萬的資金，用於推動「企業客戶入駐流程最佳化」計畫。此計畫若成功，將能縮短營收實現週期、提升客戶留存率，並顯著推動該專案與我團隊的職涯發展。",
 
-        ["high_F"] = "I've been asked to prepare a justification report requesting $3 million in funding for a " +
-            "pilot program to expand operations into a new international market. The report should include a " +
-            "problem statement and outline projected revenue gains, compliance requirements, and anticipated " +
-            "risks. The problem statement should include information about specific pilot cities and potential " +
-            "return on investment. Approval would open major growth opportunities and increase visibility for me " +
-            "and my team, though a weak case could stall expansion efforts.",
+        ["high_F"] = "我被要求準備一份說明報告，申請 NT$9,600 萬的資金，用於一項將營運據點拓展至倫敦與北京的試行計畫。若獲核准，可望開啟重大的成長契機，並提升我與團隊的能見度；但若成效不佳，則可能使更大規模的擴張停滯。",
 
-        ["high_G"] = "I've been asked to prepare a justification report requesting $1.5 million to migrate core " +
-            "company systems to a new enterprise software platform. The report should include a problem statement " +
-            "and must address financial costs, vendor comparisons, and long-term efficiency gains. The problem " +
-            "statement should include information about current system downtime, potential vendors, and potential " +
-            "return on investment. Approval would improve company-wide productivity and position my team as key " +
-            "change leaders, though any gaps could raise concerns about feasibility.",
+        ["high_G"] = "我被要求準備一份說明報告，申請 NT$4,800 萬將公司核心系統遷移至新的企業軟體平台。若獲批准，可望提升全公司的生產力，並使我的團隊成為重要變革的推動人物；但若導入過程出現問題，則可能引發外界對可行性的疑慮。",
 
-        ["high_H"] = "I've been asked to prepare a justification report recommending a $2.5 million investment in " +
-            "a strategic partnership with a leading industry firm. The report should include a problem statement " +
-            "and make the financial, technical, and cultural case for collaboration. The problem statement should " +
-            "include information about the potential partner, details in cross-company collaboration, and " +
-            "potential return on investment. Approval would secure valuable resources and strengthen my " +
-            "professional standing, but failure to justify the proposal could damage my credibility at the " +
-            "executive level.",
+        ["high_H"] = "我被要求準備一份專案論證報告，建議公司投入 NT$8,000 萬與溫莎銀行建立策略夥伴關係。若獲批准，可望取得寶貴的資源，並增強我的專業地位；但若成效不佳，則可能在高階主管層面損及我的信譽。",
     };
 
     public async void Connect()
@@ -151,7 +120,7 @@ public class ElevenLabsConnection : MonoBehaviour
         }
 
         // Resolve taskKey -> taskContext now, right before initiation, so there's no
-        // ordering race with AvatarDeskPlacer's automatic Connect() call.
+        // ordering race with AvatarPlacer's automatic Connect() call.
         ResolveTaskContext();
 
         string url = $"wss://api.elevenlabs.io/v1/convai/conversation?agent_id={agentId}";

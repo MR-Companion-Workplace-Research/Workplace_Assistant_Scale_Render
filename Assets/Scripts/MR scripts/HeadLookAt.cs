@@ -5,7 +5,7 @@ using UnityEngine;
 /// Runs in LateUpdate so it blends on top of whatever animation is playing.
 /// 
 /// Setup:
-/// - This gets added automatically by AvatarDeskPlacer after spawning.
+/// - This gets added automatically by AvatarPlacer after spawning.
 /// - Or attach manually and assign Target and HeadBone.
 /// </summary>
 public class HeadLookAt : MonoBehaviour

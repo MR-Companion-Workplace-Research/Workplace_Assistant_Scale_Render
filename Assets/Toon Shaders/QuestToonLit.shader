@@ -19,17 +19,23 @@ Shader "QuestToon/Lit"
         _DiffuseColor("Tint", Color) = (1,1,1,1)
 
         [Header(Toon Shading)]
+        // Two hard cel steps -> three flat tones. _RampThreshold = shadow/mid edge,
+        // _RampHighlight = mid/lit edge. Small _RampSmoothing keeps the edges crisp
+        // (inked), not a realistic gradient. Darker, more saturated _ShadowTint makes
+        // the cel bands actually read as stylised shading.
         _RampThreshold("Shadow Threshold", Range(0, 1)) = 0.5
-        _RampSmoothing("Shadow Softness", Range(0.001, 0.5)) = 0.15
-        _ShadowTint("Shadow Tint", Color) = (0.82, 0.74, 0.7, 1)
+        _RampHighlight("Highlight Threshold", Range(0, 1)) = 0.78
+        _RampSmoothing("Edge Softness", Range(0.001, 0.5)) = 0.03
+        _ShadowTint("Shadow Tint", Color) = (0.5, 0.4, 0.38, 1)
         _AmbientStrength("Ambient Strength", Range(0, 2)) = 1
 
         [Header(Outline)]
         _OutlineColor("Outline Color", Color) = (0,0,0,1)
         // World metres at avatarScale 1.0. Multiplied at runtime by _OutlineScale
-        // (= avatarScale, set by AvatarDeskPlacer) so it stays proportional in the
-        // miniature condition. 0.005 => 5 mm human-sized, ~1 mm at 0.2 miniature.
-        _OutlineWidth("Outline Width (m @ scale 1)", Range(0, 0.03)) = 0.005
+        // (= avatarScale, set by AvatarPlacer) so it stays proportional in the
+        // miniature condition. 0.0025 => 2.5 mm human-sized, ~0.5 mm at 0.2 miniature.
+        // (0.005 floods the small facial concavities around the mouth on a head mesh.)
+        _OutlineWidth("Outline Width (m @ scale 1)", Range(0, 0.03)) = 0.0025
     }
 
     SubShader
@@ -39,7 +45,7 @@ Shader "QuestToon/Lit"
         // ---------------------------------------------------------------
         // PASS 1 — inverted-hull outline. Extrude backfaces along the normal in
         // WORLD space by _OutlineWidth * _OutlineScale, render solid colour.
-        // _OutlineScale is fed by AvatarDeskPlacer = avatarScale, so the world
+        // _OutlineScale is fed by AvatarPlacer = avatarScale, so the world
         // thickness shrinks with the miniature condition. (Object-space extrude
         // can't do this on a skinned mesh scaled at runtime: the scale is baked
         // into the skinned verts, not unity_ObjectToWorld, so both spaces give the
@@ -64,7 +70,7 @@ Shader "QuestToon/Lit"
 
             float  _OutlineWidth;
             float4 _OutlineColor;
-            // Global, set by AvatarDeskPlacer = avatarScale.x. NOT a Property, so a
+            // Global, set by AvatarPlacer = avatarScale.x. NOT a Property, so a
             // per-material serialized value never shadows the global. Defaults to 0
             // when unset (editor preview / realistic run) -> treated as 1 below.
             float  _OutlineScale;
@@ -128,6 +134,7 @@ Shader "QuestToon/Lit"
         half4     _DiffuseColor;
         half4     _ShadowTint;
         half      _RampThreshold;
+        half      _RampHighlight;
         half      _RampSmoothing;
         half      _AmbientStrength;
 
@@ -142,13 +149,17 @@ Shader "QuestToon/Lit"
         // the darkest band toward _ShadowTint instead of pure black.
         half4 LightingToonRamp(SurfaceOutput s, half3 lightDir, half atten)
         {
-            // Half-Lambert keeps the shaded side bright -> flat, high-key illustration look.
+            // Half-Lambert keeps the shaded side from going black (flat, high-key look).
             half ndl = dot(s.Normal, lightDir) * 0.5 + 0.5;
             ndl *= atten;
-            // One soft shadow step. With a warm, light _ShadowTint this reads as a subtle,
-            // flat shade rather than a hard two-tone cel.
-            half lit = smoothstep(_RampThreshold - _RampSmoothing, _RampThreshold + _RampSmoothing, ndl);
-            half3 ramp = lerp(_ShadowTint.rgb, half3(1, 1, 1), lit);
+            // TWO crisp cel steps -> three flat tones (core shadow / mid / lit). The tiny
+            // _RampSmoothing only anti-aliases the band edges; it does NOT soften them into
+            // a realistic gradient -> deliberately inked, illustrated read.
+            half e    = _RampSmoothing;
+            half lo   = smoothstep(_RampThreshold - e, _RampThreshold + e, ndl);
+            half hi   = smoothstep(_RampHighlight - e, _RampHighlight + e, ndl);
+            half band = (lo + hi) * 0.5;                    // 0 = shadow, 0.5 = mid, 1 = lit
+            half3 ramp = lerp(_ShadowTint.rgb, half3(1, 1, 1), band);
 
             half4 c;
             c.rgb = s.Albedo * _LightColor0.rgb * ramp;

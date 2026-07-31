@@ -12,7 +12,7 @@ using CrazyMinnow.SALSA;
 /// into salsa.analysisValue. We compute that from the AudioSource's live output
 /// (GetOutputData), which DOES work for streaming clips.
 ///
-/// Added and wired at runtime by AvatarDeskPlacer.
+/// Added and wired at runtime by AvatarPlacer.
 /// </summary>
 public class SalsaExternalAudioFeed : MonoBehaviour
 {

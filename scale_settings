@@ -1,0 +1,17 @@
+female human -> 0.85
+z ~ -0.11
+contact height offset ~ -0.415
+horizontal padding ~ 0.008
+top surface ~ 0
+
+female mini -> 0.15
+all offset ~ 0
+
+male human -> 0.85
+z ~ -0.11
+offset ~ -0.45
+horizontal padding ~ 0.008
+top surface ~ 0
+
+male mini -> 0.15
+all offset ~ 0

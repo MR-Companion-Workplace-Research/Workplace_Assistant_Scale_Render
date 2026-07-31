@@ -5,48 +5,51 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Launch_Scene.unity
+    guid: fdbdf926dcd733841aaa9822e4938abe
+  - enabled: 1
+    path: Assets/Scenes/MR_Scene.unity
+    guid: cb64a09e91252ca40a83cf765d5836cb
   - enabled: 0
-    path: Assets/Scenes/Start_Scene.unity
+    path: Assets/Scenes/old_Start_Scene.unity
     guid: 7df322d1d52fa44398f085805fd9d049
   - enabled: 0
     path: Assets/Scenes/ChatBot.unity
-    guid: 9fc0d4010bbf28b4594072e72b8655ab
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot + TTS.unity
-    guid: 08291851aacbd46a28d8ab35d6d5efa7
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/Agent_Scene.unity
     guid: 0e204df824cea4258b2c305c07c9c569
   - enabled: 0
     path: Assets/Scenes/ECA 2.unity
-    guid: 4f66ff4a6b08d4727acdec9db2547693
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ECA 3.unity
-    guid: 4fdcfe3fabad542cd86edd54a469c582
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ECA 4.unity
-    guid: 655f21906b5644ddca54efd6954bbf1d
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot 2.unity
-    guid: aaff6adc880a7464ea1e303b78356a3e
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot 3.unity
-    guid: 6c9d26cb9d0a140aea3f7a53e5288754
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot 4.unity
-    guid: b6a23816d723d45179587bb1df1287ec
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot + TTS 2.unity
-    guid: 89f5a0e2ee0634bb187dc3351c1efeab
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot + TTS 4.unity
-    guid: a8d4e839aad914c30b68c17e8304b018
+    guid: 00000000000000000000000000000000
   - enabled: 0
     path: Assets/Scenes/ChatBot + TTS 3.unity
-    guid: 7d32351f2091043feae1a1865ded50f0
-  - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: cb64a09e91252ca40a83cf765d5836cb
+    guid: 00000000000000000000000000000000
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 2f81ec81d58d81c49a7d7d18e237f0fb, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 06c070f189ea19f4b912f1fff9986173, type: 2}

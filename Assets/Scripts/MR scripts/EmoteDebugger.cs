@@ -14,7 +14,7 @@ using TMPro;
 ///    ("TEST -> Positive"). So you can also see whether tags are arriving at all.
 ///
 /// Drop on a persistent scene object (e.g. the ElevenLabsConnection GameObject). The avatar is
-/// resolved lazily from AvatarDeskPlacer's spawned instance — no manual wiring needed.
+/// resolved lazily from AvatarPlacer's spawned instance — no manual wiring needed.
 /// Remove this component (or set Show Hud off) for real study runs.
 /// </summary>
 [DisallowMultipleComponent]
@@ -43,7 +43,7 @@ public class EmoteDebugger : MonoBehaviour
     private const float RefWidth = 600f;
     private const float RefHeight = 150f;
 
-    private AvatarDeskPlacer deskPlacer;
+    private AvatarPlacer avatarPlacer;
     private EmoterController emoter;
     private Transform cam;
 
@@ -58,7 +58,7 @@ public class EmoteDebugger : MonoBehaviour
     private void Start()
     {
         if (bridge == null) bridge = FindObjectOfType<ElevenLabsEmoteBridge>();
-        deskPlacer = FindObjectOfType<AvatarDeskPlacer>();
+        avatarPlacer = FindObjectOfType<AvatarPlacer>();
         if (Camera.main != null) cam = Camera.main.transform;
 
         if (bridge != null) bridge.OnEmotionTriggered += OnAgentEmotion;
@@ -122,8 +122,8 @@ public class EmoteDebugger : MonoBehaviour
 
     private Transform ResolveAvatarRoot()
     {
-        if (deskPlacer == null) deskPlacer = FindObjectOfType<AvatarDeskPlacer>();
-        var a = deskPlacer != null ? deskPlacer.GetSpawnedAvatar() : null;
+        if (avatarPlacer == null) avatarPlacer = FindObjectOfType<AvatarPlacer>();
+        var a = avatarPlacer != null ? avatarPlacer.GetSpawnedAvatar() : null;
         return a != null ? a.transform : null;
     }
 

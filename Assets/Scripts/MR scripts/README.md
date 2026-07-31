@@ -2,10 +2,73 @@
 
 This directory contains the core scripts for the MR agent project — a Mixed Reality application that spawns an AI-powered avatar on the user's desk using Meta Quest's Scene Understanding (MRUK).
 
+## Session flow
+
+The app boots into **Launch_Scene**, not the study scene:
+
+```
+Launch_Scene                                          MR_Scene
+  STUDY SETUP   ── config ──┐                           STUDY CONTROL
+  (researcher edits THIS)   ├─► StudySession ─────────► (receives, then
+  LAUNCH MENU   ── task ────┘    (static carrier)         pushes as before)
+  (participant picks, START)
+```
+
+**What the researcher sets, and when:**
+
+| Value | Where | How often |
+|---|---|---|
+| Participant ID | `STUDY SETUP` in Launch_Scene | once per participant, before the build |
+| Scale / Render Style / placement | `STUDY SETUP` in Launch_Scene | once per participant, before the build |
+| Task (A–H) | the in-headset launch menu | every run, by the participant |
+
+Risk Level is within-subjects, so each participant runs several tasks. Selecting the task at
+runtime is what removes the Android rebuild that would otherwise be needed between trials.
+
+**STUDY SETUP lives in Launch_Scene, not MR_Scene**, because the menu displays the participant
+id — and while the menu is running MR_Scene isn't loaded, so its STUDY CONTROL object doesn't
+exist yet to be read from. Putting the config in the scene that boots first gives one edit point
+*and* a menu that can show it, with no second copy to drift.
+
+The launch menu shows the participant id (`受試者ID：P07`) and eight bare `任務 A`…`任務 H`
+buttons. It shows **neither the condition nor the task names** — either would reveal the
+manipulation (see the class header on `LaunchMenu.cs`).
+
+The menu is in Traditional Chinese, matching `SwotPanel`, and uses the same `Assets/Fonts/msjh
+SDF` asset (wired automatically by the scene generator). That atlas is **static**: characters
+not baked into it do not render and do not fall back. If you reword `instruction`, verify the
+new characters actually appear on the headset. The task *letters* stay Latin so they match what
+the researcher says aloud and what the task keys and log files use.
+
+Regenerate the scene with **Tools > Study > Create or Refresh Launch Scene**.
+
+Opening `MR_Scene` directly still works: with no session to read from, it runs entirely off
+`StudyControlPanel`'s own inspector values. Those fields are the **dev fallback** — in a real
+session every one of them is overwritten at `Awake`, so don't configure a participant there.
+
+### Practice app
+
+The practice APK mirrors the same two-scene flow, so participants rehearse the *whole* process
+rather than just the SWOT button:
+
+```
+DemoLaunch_Scene  ──►  DemoScene
+(from Launch_Scene)    (from MR_Scene)
+```
+
+Its menu shows `練習模式` instead of a participant id (the APK is built once and sideloaded to
+every headset), has its `STUDY SETUP` object **deleted** — so no participant's identity or
+condition is compiled into it — and loads `DemoScene`. The A–H buttons are kept
+and stay bare letters — practising the choice reveals no task content. `SwotPanel` runs with
+`demoBlankContent`, so the sheet shows its headers with empty quadrants.
+
+Regenerate both with **Tools > Study > Create or Refresh Demo Scene** (needs `Launch_Scene` to
+exist first).
+
 ## Architecture
 
 ```
-AvatarDeskPlacer (entry point)
+AvatarPlacer (entry point)
  ├── HeadLookAt              (gaze tracking)
  ├── SimpleAutoBlinker        (eye blink animation)
  ├── GestureTrigger           (upper-body gestures)
@@ -18,13 +81,68 @@ ExperimenterRemoteTrigger (UDP remote control from experimenter PC)
 
 ## Scripts
 
-### AvatarDeskPlacer.cs
+### StudySetup.cs — **the one object the researcher edits**
 
-The main entry point. When MRUK finishes scanning the room, this script finds a `TABLE` anchor and spawns the avatar prefab on it.
+Sits on `STUDY SETUP` in Launch_Scene. Holds a `StudyConfig` (participant id, condition label,
+avatar variant, scale condition, all placement fields) and publishes it to `StudySession` in
+`Awake`. Its custom editor draws the fields flat, so the nesting stays an implementation detail.
+
+Per participant, this is the only thing you change.
+
+---
+
+### StudyConfig.cs
+
+The `[Serializable]` field list itself, declared **once** and shared by `StudySetup`,
+`StudySession` and `StudyControlPanel`. Three hand-maintained copies of the same twelve fields
+would drift as fields are added; copying one object cannot.
+
+---
+
+### StudySession.cs
+
+Static carrier across the scene load, holding two independent things: the researcher's config
+(from `StudySetup`) and the participant's task (from `LaunchMenu`).
+
+A static rather than a `DontDestroyOnLoad` object so that `MR_Scene` stays openable on its own
+in the editor: `HasConfig`/`HasTask` are simply false and `StudyControlPanel` falls back to its
+own inspector values.
+
+---
+
+### LaunchMenu.cs
+
+The participant-facing passthrough-MR menu. Builds its world-space canvas at runtime (same
+approach as `SwotPanel`), world-locks it in front of the participant, and hit-tests controller
+rays against the button rects directly.
+
+**Why no EventSystem / OVRInputModule / OVRRaycaster:** that stack needs four things wired
+together and silently does nothing if any one is wrong. This is a participant-facing critical
+path where a dead menu ends the session, so one ray drives the drawn laser, the cursor dot, the
+hover tint and the click — what is highlighted is always exactly what will be pressed.
+
+**Pointer ray:** a visible laser is drawn from the controller (`showPointerRay`, on by default).
+This is not decoration — the controller models are hidden in the MR scenes, so with only a cursor
+dot there is nothing on screen at all until the participant's aim happens to cross the panel, and
+pointing becomes trial and error. The ray stops at the panel when it hits and extends
+`rayMaxLength` when it does not, and brightens on hover. It is deliberately **not** drawn for the
+head-gaze fallback, where a line from the eye is just a smear at the centre of view.
+
+**Input:** either index trigger or A/X to click; **B/Y re-centres** the panel if the
+participant has turned away. Falls back to a head-gaze ray if no controller is tracked, and to
+keyboard `1`–`8` + `Return` in the editor. Only *connected* controllers are cast from — a hand
+anchor holds its last pose after its controller sleeps, which would otherwise let a stale pose
+steal the hover.
+
+---
+
+### AvatarPlacer.cs
+
+The main entry point. When MRUK finishes scanning the room, this script finds the configured scene anchor (a `TABLE`/desk by default, but `COUCH`, `BED`, `FLOOR`, etc. can be selected) and spawns the avatar prefab on it.
 
 **Responsibilities:**
 - Listens for MRUK scene-loaded callback
-- Searches room anchors for a table/desk
+- Searches room anchors for the configured surface type (`spawnAnchorLabel`)
 - Instantiates the avatar at the anchor position with a configurable offset and scale
 - Rotates the avatar to face the user (via `OVRCameraRig`)
 - Attaches `HeadLookAt` for gaze tracking
@@ -32,7 +150,7 @@ The main entry point. When MRUK finishes scanning the room, this script finds a 
 - Auto-connects to the selected voice backend (ElevenLabs or OpenAI)
 - Exposes runtime control: `SetGazeTracking()`, `UpdateFacing()`, `SetScale()`
 
-**Inspector fields:** `avatarPrefab`, `cameraRig`, `positionOffset`, `avatarScale`, `faceMeshName`, `mouthBlendShapeName`
+**Inspector fields:** `avatarPrefab`, `cameraRig`, `spawnAnchorLabel`, `positionOffset`, `avatarScale`, `faceMeshName`, `mouthBlendShapeName`
 
 ---
 

@@ -1,0 +1,101 @@
+Task A: Office Chairs
+Low Risk / Low Reward
+Task Summary: You've been asked to prepare a report requesting $500 to purchase replacement chairs for the 3rd-floor meeting room. While not an urgent safety concern, the proposal could improve comfort and professionalism during cross-team collaboration. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The proposal uses ULINE's bulk rate of $50 per chair, allowing ten chairs to be replaced within the $500 request.
+Weaknesses:
+It commits $500 to a non-urgent, limited-scope facilities improvement.
+Opportunities:
+Better seating could improve comfort, professionalism, and collaboration in cross-team and client meetings.
+Threats:
+ULINE's price or stock availability could change before approval, increasing the cost or delaying the replacement.
+
+Task B: Printer Toner
+Low Risk / Low Reward
+Task Summary: You've been asked to prepare a report requesting $800 to restock the shared printer and toner supplies. While necessary for daily operations, the proposal is routine and unlikely to face significant pushback. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+Bulk purchasing from HP at $15 per unit lowers the unit cost and establishes reserve stock.
+Weaknesses:
+The proposal uses $800 for routine replenishment and does not add new operational capability.
+Opportunities:
+A reliable supply could reduce printer interruptions, protect report deadlines, and lower emergency purchasing costs.
+Threats:
+HP price increases, supply shortages, or shipping delays could reduce the expected savings and leave the cabinet understocked.
+
+
+Task C: Coffee Machine
+Low Risk / Low Reward
+Task Summary: You've been asked to prepare a brief report requesting $1,200 from the facilities budget to replace the worn coffee machine in the employee lounge. While appreciated by staff, the proposal has a limited impact on broader operations. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The proposal uses Nespresso's corporate discount to keep the replacement cost at $1,200.
+Weaknesses:
+It commits $1,200 to a staff-comfort item with minimal direct operational impact.
+Opportunities:
+A reliable new machine could improve employee morale and make work breaks more efficient.
+Threats:
+Nespresso could change the corporate price or discontinue the selected model before the purchase is completed.
+
+
+Task D: Conference-Room Whiteboards
+Low Risk / Low Reward
+Task Summary: You've been asked to draft a report requesting $1,500 to replace damaged whiteboards in two conference rooms. While useful for meetings, the proposal is small in scope and unlikely to be controversial. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The proposal uses STAPLES' bulk rate of $100 per unit, making the multi-board replacement cost-efficient.
+Weaknesses:
+It requires $1,500 for a minor facilities upgrade that is helpful but not essential to operations.
+Opportunities:
+Clearer whiteboards could improve meeting visibility, collaboration, and brainstorming quality.
+Threats:
+STAPLES' pricing, inventory, or delivery schedule could change before procurement, increasing the cost or delaying installation.
+
+
+Task E: Client Onboarding Project
+High Risk / High Reward
+Task Summary: You've been asked to prepare a justification report requesting $2 million in funding for an initiative to streamline enterprise client onboarding. Success could reduce time-to-revenue, improve customer retention, and significantly advance both the project and your team's career progression. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The proposal is supported by pilot evidence showing that onboarding fell from 30 days to 18 days and produced approximately $500,000 in savings.
+Weaknesses:
+It requires a $2 million investment and introduces substantial implementation and change-management complexity when scaled across the company.
+Opportunities:
+A successful rollout could increase revenue, improve client retention, and strengthen the team's visibility and recognition.
+Threats:
+Changing client requirements, compliance demands, or external integration dependencies could delay the rollout and reduce the projected benefits.
+
+
+Task F: International Expansion Pilot
+High Risk / High Reward
+Task Summary: You've been asked to prepare a justification report requesting $3 million in funding for a pilot program to expand operations into London and Beijing. Approval could open major growth opportunities and increase visibility for you and your team, though weak results could stall broader expansion. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The pilot structure tests market viability and generates local evidence before the company commits to a full-scale expansion.
+Weaknesses:
+The proposal requires $3 million and creates significant coordination and resource demands across two distinct international markets.
+Opportunities:
+Annual market growth of about 20% in the two target cities could support new revenue, broader market reach, and greater team visibility.
+Threats:
+Regulatory changes, currency volatility, local competition, or cultural misalignment could undermine performance and cause financial or reputational damage.
+
+
+Task G: Enterprise Software Upgrade
+High Risk / High Reward
+Task Summary: You've been asked to prepare a justification report requesting $1.5 million to migrate core company systems to a new enterprise software platform. Approval could improve company-wide productivity and position your team as key change leaders, though implementation gaps could raise concerns about feasibility. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The proposal consolidates core systems on one platform, standardizes workflows, and is projected to save approximately $200,000.
+Weaknesses:
+It requires a $1.5 million investment and involves complex vendor selection, migration, training, and change-management work.
+Opportunities:
+A successful upgrade could reduce downtime, improve company-wide productivity, streamline cross-team collaboration, and establish the team as effective change leaders.
+Threats:
+Vendor underperformance, implementation delays, cybersecurity issues, or integration failures could disrupt operations and weaken trust in leadership.
+
+
+Task H: Strategic Partnership
+High Risk / High Reward
+Task Summary: You've been asked to prepare a justification report recommending a $2.5 million investment in a strategic partnership with Windsor Banking. Approval could secure valuable resources and strengthen your professional standing, but poor results could damage credibility at the executive level. You seek the help of Sam, an AI workplace assistant, to complete a SWOT analysis of the proposal.
+Strengths:
+The proposal gives the company faster access to Windsor Banking's resources, capabilities, and market reach than building those assets internally.
+Weaknesses:
+It requires a $2.5 million commitment, offers uncertain short-term returns, and reduces control by making success partly dependent on a partner.
+Opportunities:
+The partnership could support approximately 25% market growth, expand the company's reach, and strengthen its competitive position.
+Threats:
+Misaligned goals, partner underperformance, regulatory complications, or reputational problems involving Windsor Banking could reduce the partnership's value.

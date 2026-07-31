@@ -14,7 +14,7 @@ using UnityEngine;
 ///
 /// Setup:
 /// 1. Attach to the same GameObject as ElevenLabsConnection (+ AgentVoiceController).
-/// 2. AvatarDeskPlacer calls SetEmoter() with the spawned avatar's EmoterController.
+/// 2. AvatarPlacer calls SetEmoter() with the spawned avatar's EmoterController.
 ///
 /// Keep the tag list below in sync with the tags you configured on the agent.
 /// </summary>
@@ -26,7 +26,7 @@ public class ElevenLabsEmoteBridge : MonoBehaviour
     [Tooltip("ElevenLabs connection to listen to. Auto-found if left empty.")]
     public ElevenLabsConnection connection;
 
-    [Tooltip("The avatar's EmoterController. Assigned at runtime by AvatarDeskPlacer after spawn.")]
+    [Tooltip("The avatar's EmoterController. Assigned at runtime by AvatarPlacer after spawn.")]
     public EmoterController emoter;
 
     [Header("Behaviour")]
@@ -85,7 +85,7 @@ public class ElevenLabsEmoteBridge : MonoBehaviour
             connection.OnTranscriptDone -= HandleAgentText;
     }
 
-    /// <summary>Called by AvatarDeskPlacer once the avatar (with EmoterController) exists.</summary>
+    /// <summary>Called by AvatarPlacer once the avatar (with EmoterController) exists.</summary>
     public void SetEmoter(EmoterController controller)
     {
         emoter = controller;

@@ -17,9 +17,11 @@ Shader "QuestToon/Hair"
         _AlphaClip("Alpha Clip", Range(0, 1)) = 0.5
 
         [Header(Toon Shading)]
+        // Matches QuestToon/Lit: two hard cel steps -> three flat tones, crisp edges.
         _RampThreshold("Shadow Threshold", Range(0, 1)) = 0.5
-        _RampSmoothing("Shadow Softness", Range(0.001, 0.5)) = 0.15
-        _ShadowTint("Shadow Tint", Color) = (0.82, 0.74, 0.7, 1)
+        _RampHighlight("Highlight Threshold", Range(0, 1)) = 0.78
+        _RampSmoothing("Edge Softness", Range(0.001, 0.5)) = 0.03
+        _ShadowTint("Shadow Tint", Color) = (0.5, 0.4, 0.38, 1)
         _AmbientStrength("Ambient Strength", Range(0, 2)) = 1
     }
 
@@ -39,6 +41,7 @@ Shader "QuestToon/Hair"
         half4     _DiffuseColor;
         half4     _ShadowTint;
         half      _RampThreshold;
+        half      _RampHighlight;
         half      _RampSmoothing;
         half      _AmbientStrength;
         half      _AlphaClip;
@@ -52,11 +55,14 @@ Shader "QuestToon/Hair"
 
         half4 LightingToonRamp(SurfaceOutput s, half3 lightDir, half atten)
         {
-            // Half-Lambert + one soft shadow step (matches QuestToon/Lit).
+            // Two crisp cel steps -> three flat tones (matches QuestToon/Lit).
             half ndl = dot(s.Normal, lightDir) * 0.5 + 0.5;
             ndl *= atten;
-            half lit = smoothstep(_RampThreshold - _RampSmoothing, _RampThreshold + _RampSmoothing, ndl);
-            half3 ramp = lerp(_ShadowTint.rgb, half3(1, 1, 1), lit);
+            half e    = _RampSmoothing;
+            half lo   = smoothstep(_RampThreshold - e, _RampThreshold + e, ndl);
+            half hi   = smoothstep(_RampHighlight - e, _RampHighlight + e, ndl);
+            half band = (lo + hi) * 0.5;                    // 0 = shadow, 0.5 = mid, 1 = lit
+            half3 ramp = lerp(_ShadowTint.rgb, half3(1, 1, 1), band);
 
             half4 c;
             c.rgb = s.Albedo * _LightColor0.rgb * ramp;

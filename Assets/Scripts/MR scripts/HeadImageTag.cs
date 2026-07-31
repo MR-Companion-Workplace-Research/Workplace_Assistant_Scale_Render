@@ -7,7 +7,7 @@ using UnityEngine;
 ///
 /// Setup:
 /// 1. Attach this script to your avatar prefab root (the same prefab that
-///    AvatarDeskPlacer spawns), or to any GameObject that has an Animator
+///    AvatarPlacer spawns), or to any GameObject that has an Animator
 ///    in its children.
 /// 2. Drag a PNG onto the "Image" field in the Inspector. A default-imported
 ///    Texture2D is fine — you do NOT need to change its import type to Sprite.

@@ -20,6 +20,12 @@ public class animDriver : MonoBehaviour
         Anim.SetTrigger("GestureTrigger");
     }
 
+    public void Gesture2Anim()
+    {
+        // Trigger the second (alternate) Gesture Animation
+        Anim.SetTrigger("Gesture2Trigger");
+    }
+
     public void HeadNodAnim()
     {
         // Trigger Head Nod Animation
