@@ -18,9 +18,10 @@ facial expression, gaze, and body gesture, while a SWOT brief is shown on a pane
 | Engine | Unity, **Built-in Render Pipeline (BiRP)** |
 | XR runtime | Meta XR SDK (Core + Interaction), **MR Utility Kit (MRUK)** for scene understanding, **Depth API / EnvironmentDepthManager** for occlusion |
 | Hardware | Meta Quest 3, **passthrough** (camera see-through) MR |
-| Avatar | Character Creator 4 character (`Young_cami`), **Humanoid** rig, Mixamo + custom animation clips |
-| Lip-sync | SALSA (amplitude-driven viseme/mouth animation) |
-| Conversational AI | **ElevenLabs Conversational AI** (streaming voice agent), per-trial task injection via dynamic variables |
+| Avatar | Character Creator 4 characters (`female` / `male` CC4 exports), **Humanoid** rig, Mixamo + custom seated/standing clips. Each character ships as a **realistic** and a **toon** prefab variant, so four avatar variants exist (Female/Male × Real/Toon) and one is spawned per session |
+| Lip-sync | SALSA (amplitude-driven viseme/mouth animation), fed the live playback amplitude |
+| Conversational AI | **ElevenLabs Conversational AI** (streaming voice agent), per-trial task injection via the `{{task_context}}` dynamic variable. Legacy **OpenAI Realtime API** backend kept as an alternative |
+| Study language | The shipped study build runs in **Traditional Chinese (zh-TW)** — agent replies, the SWOT sheet, and the in-headset launch menu |
 
 Because the build ships as a static APK, **any change to shaders, materials, prefabs, or animator
 assets requires a rebuild and redeploy** to be visible on the headset.
@@ -50,7 +51,7 @@ assets requires a rebuild and redeploy** to be visible on the headset.
    Room placement:  MRUK detects the real desk ─► avatar is spawned on it, scaled,
                     and turned to face the participant.
    Side panel:      A SWOT brief for the current task is shown on a world-space panel.
-   Control:         The experimenter advances phases / trials (semi-Wizard-of-Oz).
+   Control:         Each run is one task, chosen by the participant on the launch menu.
 ```
 
 ---
@@ -58,14 +59,21 @@ assets requires a rebuild and redeploy** to be visible on the headset.
 ## 3. Scene placement & anchoring
 
 On startup the system waits for **MRUK** to finish loading the participant's scanned room, then searches
-the room's anchors for a **TABLE**. The avatar is instantiated at that desk anchor (plus a configurable
-local offset), uniformly **scaled** to the current condition, and rotated to **face the participant's
-head** (yaw only, so it stays upright).
+the room's anchors for the configured **surface type** (a **TABLE**/desk by default; `COUCH`, `BED`,
+`FLOOR`, etc. can be selected, and more than one can be ticked as a fallback set). The avatar is
+instantiated at that anchor (plus a configurable local offset), uniformly **scaled** to the current
+condition, and rotated to **face the participant's head** (yaw only, so it stays upright).
 
-The desk anchor is the single spatial reference for the whole experience: the avatar, its voice source,
-and the SWOT panel are all positioned relative to where the participant actually sits, so the scene is
-consistent regardless of room layout. If no table is found (room not scanned), placement is skipped and
-a warning is logged — i.e. the desk scan is a hard prerequisite.
+Placement is **scale-independent**: after scaling and posing, the avatar is vertically snapped so its
+**contact point rests on the surface** — *feet on the surface* when standing (miniature on a desk) or
+*hips on the cushion* when seated (life-sized on a couch). Because the snap is measured at the avatar's
+final size and pose, the same setup sits correctly at any scale, and a seated avatar sits *in* the couch
+rather than hovering above it.
+
+The anchor is the single spatial reference for the whole experience: the avatar, its voice source, and
+the SWOT panel are all positioned relative to where the participant actually sits, so the scene is
+consistent regardless of room layout. If no matching anchor is found (room not scanned), placement is
+skipped and a warning is logged — i.e. the surface scan is a hard prerequisite.
 
 ---
 
@@ -151,16 +159,17 @@ Gestures are fired as **animation triggers**, kept separate from the facial-emot
 
 **Gaze.** The lip-sync asset's eye module is pointed at the participant's head at runtime, so the avatar
 **looks at the participant** during the conversation. (This deliberately replaces an older head-tracking
-component that fought the rig for control of the head bone.) Gaze can be toggled by the experimenter.
+component that fought the rig for control of the head bone.)
 
 ---
 
 ## 8. The SWOT side panel
 
-Each trial's **SWOT brief** is presented on a **world-space panel beside the avatar**. The panel reads the
-**active task key** from the voice connection and shows the matching task's Strengths / Weaknesses /
-Opportunities / Threats. The experimenter reveals it via a **controller button**, and it **auto-hides**
-after a short interval. The panel is scale-independent — it reads the same whether the avatar is miniature
+Each trial's **SWOT brief** is presented on a **world-space panel** that the participant summons on demand.
+The panel reads the **active task key** from the voice connection and shows the matching task's Strengths /
+Weaknesses / Opportunities / Threats. The participant reveals it with a **controller button** (B/Y); by
+default it rides their controller like a sheet of paper held in the hand, and it **auto-hides** after a
+short interval. The panel is scale-independent — it reads the same whether the avatar is miniature
 or life-sized — because the **SWOT belongs to the participant, not the agent** (the agent never receives
 the SWOT text; it elicits that content from the participant).
 
@@ -215,26 +224,32 @@ The result is **four between-subjects visual cells** from two prefabs (render st
 
 ## 11. Runtime sequence of a session
 
-1. **Launch** on Quest; MRUK loads the scanned room.
-2. **Desk detected** (TABLE anchor); the **condition's prefab** is spawned there, **scaled**, and **turned
-   to face** the participant.
+1. **Launch** the APK on Quest into **Launch_Scene**; the participant picks the trial's **task (A–H)** from
+   an in-headset passthrough menu, which loads **MR_Scene** (see §14). MRUK then loads the scanned room.
+2. **Surface detected** (the configured anchor, TABLE by default); the **condition's avatar variant** is
+   spawned there, **scaled**, snapped to the surface, and **turned to face** the participant.
 3. **Wiring** happens automatically on spawn: spatial AudioSource, lip-sync feed, facial-emote bridge,
    body-gesture driver, and eye-gaze target are all connected to the freshly spawned avatar; the outline
    scale is set from the avatar's scale.
 4. **Connect** to ElevenLabs; on connect the avatar plays its **greeting wave**.
 5. **Conversation loop:** the participant speaks → the agent replies → the avatar **lip-syncs**, **emotes**,
-   and occasionally **gestures**; the experimenter shows the **SWOT panel** on demand.
-6. **Trial / risk progression** is driven by the experimenter (semi-Wizard-of-Oz): the **task key** selects
-   the next task, which updates both the agent's injected task context and the SWOT panel.
-7. **End** of session.
+   and occasionally **gestures**; the participant reveals the **SWOT panel** on their controller on demand.
+   Throughout, a **conversation logger** writes the transcript and timing to the headset (see §15).
+6. **Task = one run.** The task the participant picked at launch fixes both the agent's injected
+   `{{task_context}}` and the SWOT content, and carries the within-subject **Risk** level (`low_*` vs
+   `high_*`). A different risk level is a different run with a different task chosen on the menu — no
+   rebuild required.
+7. **End** of session; the logger flushes and closes its files.
 
 ---
 
 ## 12. Experiment control
 
-Phase and trial transitions are **experimenter-driven** (semi-Wizard-of-Oz) via controller-button input —
-showing the SWOT panel, advancing tasks, toggling gaze. This keeps **session pacing identical across
-conditions** (same follow-up count, same time cap), so timing never correlates with the manipulation.
+Session pacing is kept **identical across conditions** (same follow-up count, same time cap), so timing
+never correlates with the manipulation. The one interactive control during a run is the **SWOT panel**:
+the participant reveals it with a controller button (B/Y), holds it like a sheet of paper in the hand,
+and it auto-hides after a short interval. The task itself is fixed for the whole run by what the
+participant picked on the launch menu (§14), so there is nothing to advance mid-session.
 
 ---
 
@@ -242,6 +257,68 @@ conditions** (same follow-up count, same time cap), so timing never correlates w
 
 - **Rebuild after asset changes.** Shader/material/prefab/animator edits only appear after an APK rebuild.
 - **Headphones are mandatory** on the headset to prevent the agent self-interrupting via echo.
-- **Desk scan required.** The room must be scanned (table present) or the avatar won't place.
+- **Surface scan required.** The room must be scanned (the configured anchor present) or the avatar won't place.
+- **Task is chosen in-headset** on the launch menu, per run; no rebuild is needed between risk levels (§14).
+- **A CJK TMP font is required** for the zh-TW build — the SWOT panel and launch menu use `Assets/Fonts/msjh SDF`;
+  the default Latin font renders Chinese as blank boxes.
+- **Retrieve logs over USB** with `adb pull` (or the pull-logs helper / Quest Developer Hub) — no Quest Link
+  needed (see §15).
 - **Keep the agent prompt fixed.** Only the per-trial task context may change; scale/render-style must
   never enter the prompt. (See the design-validity rules in `study_note.md`.)
+
+---
+
+## 14. Study configuration & the launch flow
+
+The build boots into **Launch_Scene**, not the study scene, and the study is configured in two places so
+that **nothing has to be rebuilt between trials**:
+
+```
+Launch_Scene                                          MR_Scene
+  STUDY SETUP   ── config ──┐                           STUDY CONTROL
+  (researcher edits THIS)   ├─► StudySession ─────────► (receives, then applies
+  LAUNCH MENU   ── task ────┘    (static carrier)         to AvatarPlacer + ElevenLabs)
+  (participant picks, START)
+```
+
+| Value | Set where | How often |
+|---|---|---|
+| Participant ID | `STUDY SETUP` in Launch_Scene | once per participant, **before the build** |
+| Scale / Render Style (avatar variant) / placement | `STUDY SETUP` in Launch_Scene | once per participant, before the build |
+| Task (A–H) → Risk level | the in-headset launch menu | **every run, by the participant** |
+
+`StudySession` is a static carrier that survives the scene load; `STUDY CONTROL` (`StudyControlPanel`)
+reads it in `MR_Scene` and pushes every per-trial knob into `AvatarPlacer` and `ElevenLabsConnection`.
+The launch menu shows only the participant id and eight bare `任務 A…H` buttons — **never** the condition
+or task names, either of which would reveal the manipulation. Opening `MR_Scene` directly still works for
+dev testing: with no session to read, the scene runs entirely off `StudyControlPanel`'s own inspector
+values (the **dev fallback**).
+
+**Practice app.** A separate practice APK mirrors the same two-scene flow (`DemoLaunch_Scene` →
+`DemoScene`) so participants rehearse the whole process. Its menu shows `練習模式` instead of a participant
+id, its `STUDY SETUP` object is deleted (no identity/condition compiled in), and the SWOT sheet shows its
+headers with empty quadrants. Regenerate the scenes with **Tools > Study > Create or Refresh Launch/Demo
+Scene**.
+
+---
+
+## 15. Conversation logging
+
+Because the build ships as a standalone APK with no editor console, a **conversation logger**
+(`ConversationLogger`) records each session to a file **on the headset**, under
+`Application.persistentDataPath/ConversationLogs/<participant>/`. It subscribes to the voice connection's
+events and writes **JSONL** (one JSON object per line): session start/end, connect/disconnect, the
+conversation-init metadata (ElevenLabs conversation id, audio formats, task key), user and agent messages,
+the agent's precise speaking interval, interruptions/corrections, and errors — each stamped with a
+wall-clock ISO-8601 time **and** milliseconds since session start. It can also mirror the entire Unity
+console to a companion `.log` file. Identity (participant / condition) is read from `STUDY CONTROL`, not
+configured on the logger.
+
+Retrieve the logs after a session over USB (no Quest Link):
+
+```
+adb pull "/sdcard/Android/data/com.DefaultCompany.MRWorkplaceAssistant/files/ConversationLogs" .
+```
+
+or use the `Tools/pull-logs.ps1` helper, the Quest Developer Hub file browser, or Windows Explorer (the
+headset mounts as an MTP drive).

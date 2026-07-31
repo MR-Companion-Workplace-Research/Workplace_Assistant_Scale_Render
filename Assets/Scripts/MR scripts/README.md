@@ -67,239 +67,217 @@ exist first).
 
 ## Architecture
 
-```
-AvatarPlacer (entry point)
- ├── HeadLookAt              (gaze tracking)
- ├── SimpleAutoBlinker        (eye blink animation)
- ├── GestureTrigger           (upper-body gestures)
- └── AgentVoiceController (mic, playback, lip sync)
-      ├── ElevenLabsConnection   (voice backend option A)
-      └── RealtimeAPIConnection  (voice backend option B)
+In `MR_Scene`, one **STUDY CONTROL** object (`StudyControlPanel`) applies the per-trial config to
+`AvatarPlacer` and `ElevenLabsConnection` in `Awake`. `AvatarPlacer` then spawns the avatar on an
+MRUK anchor and wires everything to the freshly-spawned instance at runtime:
 
-ExperimenterRemoteTrigger (UDP remote control from experimenter PC)
 ```
+StudyControlPanel  ("STUDY CONTROL")           ← pulls config from StudySession, pushes it out
+ ├── AvatarPlacer                               spawns the avatar variant on an MR anchor, then wires:
+ │     ├── SALSA  (Salsa / Emoter / Eyes)         lip-sync + facial emotes + gaze   (live on the prefab)
+ │     ├── SalsaExternalAudioFeed                 feeds live playback amplitude into SALSA
+ │     └── EmoterController → animDriver          facial-emote + body-gesture animator hooks
+ ├── AgentVoiceController                        mic capture, PCM streaming, audio playback
+ │     ├── ElevenLabsConnection                    voice backend — PRIMARY
+ │     └── RealtimeAPIConnection                   voice backend — OpenAI (legacy/alt)
+ ├── ElevenLabsEmoteBridge                       parses [emotion tags] in transcript → facial emote
+ ├── AvatarBodyGestures                          connection/response events → wave / gesture / head-nod
+ ├── ConversationLogger                          on-device JSONL transcript + timing log
+ └── SwotPanel                                   world-space SWOT sheet, controller-triggered
+```
+
+Lip-sync, gaze, and blinking all live in **SALSA** on the avatar prefab (rebound to each new CC avatar
+with **Tools > Study > Bind SALSA To New Avatar** — see `../../Editor/SalsaAvatarBinder.md`).
+`AvatarPlacer` only points SALSA's audio and look-target at the right runtime objects; it no longer
+attaches the older `HeadLookAt` / `SimpleAutoBlinker` components (see **Legacy** below).
 
 ## Scripts
 
-### StudySetup.cs — **the one object the researcher edits**
+### Study configuration
 
-Sits on `STUDY SETUP` in Launch_Scene. Holds a `StudyConfig` (participant id, condition label,
-avatar variant, scale condition, all placement fields) and publishes it to `StudySession` in
-`Awake`. Its custom editor draws the fields flat, so the nesting stays an implementation detail.
+#### StudyControlPanel.cs — the single per-trial control surface
 
-Per participant, this is the only thing you change.
+Sits on `STUDY CONTROL` in `MR_Scene`. In `Awake` (with an early execution order) it **pulls** the
+researcher's config and the participant's task from `StudySession`, then **pushes** every per-trial knob
+(avatar variant, scale condition + value, placement, surface contact) into `AvatarPlacer` and the task
+key into `ElevenLabsConnection`. `ConversationLogger` reads participant id / condition label straight off
+this panel. Its inspector fields are the **dev fallback** used when `MR_Scene` is opened directly.
 
----
+#### StudySetup.cs / StudyConfig.cs / StudySession.cs
 
-### StudyConfig.cs
+`StudySetup` sits on `STUDY SETUP` in Launch_Scene and is **the one object the researcher edits per
+participant**; it holds a `StudyConfig` and publishes it to `StudySession` in `Awake`. `StudyConfig` is
+the `[Serializable]` field list declared **once** and shared by `StudySetup`, `StudySession`, and
+`StudyControlPanel`, so the same fields can't drift across three copies. `StudySession` is a **static
+carrier** (not `DontDestroyOnLoad`, so `MR_Scene` stays openable on its own) holding the config and the
+picked task; `HasConfig` / `HasTask` are false when a scene is opened directly.
 
-The `[Serializable]` field list itself, declared **once** and shared by `StudySetup`,
-`StudySession` and `StudyControlPanel`. Three hand-maintained copies of the same twelve fields
-would drift as fields are added; copying one object cannot.
+#### LaunchMenu.cs
 
----
+The participant-facing passthrough-MR menu. Builds its world-space canvas at runtime, world-locks it in
+front of the participant, and hit-tests controller rays against the button rects directly (no
+EventSystem/OVRRaycaster stack, so a mis-wire can't silently kill this critical path). Draws a visible
+pointer laser (the controller models are hidden in MR), clicks with trigger or A/X, re-centres with B/Y,
+and falls back to head-gaze, then to keyboard `1`–`8` + `Return` in the editor.
 
-### StudySession.cs
+### Avatar placement & animation
 
-Static carrier across the scene load, holding two independent things: the researcher's config
-(from `StudySetup`) and the participant's task (from `LaunchMenu`).
+#### AvatarPlacer.cs — the entry point
 
-A static rather than a `DontDestroyOnLoad` object so that `MR_Scene` stays openable on its own
-in the editor: `HasConfig`/`HasTask` are simply false and `StudyControlPanel` falls back to its
-own inspector values.
-
----
-
-### LaunchMenu.cs
-
-The participant-facing passthrough-MR menu. Builds its world-space canvas at runtime (same
-approach as `SwotPanel`), world-locks it in front of the participant, and hit-tests controller
-rays against the button rects directly.
-
-**Why no EventSystem / OVRInputModule / OVRRaycaster:** that stack needs four things wired
-together and silently does nothing if any one is wrong. This is a participant-facing critical
-path where a dead menu ends the session, so one ray drives the drawn laser, the cursor dot, the
-hover tint and the click — what is highlighted is always exactly what will be pressed.
-
-**Pointer ray:** a visible laser is drawn from the controller (`showPointerRay`, on by default).
-This is not decoration — the controller models are hidden in the MR scenes, so with only a cursor
-dot there is nothing on screen at all until the participant's aim happens to cross the panel, and
-pointing becomes trial and error. The ray stops at the panel when it hits and extends
-`rayMaxLength` when it does not, and brightens on hover. It is deliberately **not** drawn for the
-head-gaze fallback, where a line from the eye is just a smear at the centre of view.
-
-**Input:** either index trigger or A/X to click; **B/Y re-centres** the panel if the
-participant has turned away. Falls back to a head-gaze ray if no controller is tracked, and to
-keyboard `1`–`8` + `Return` in the editor. Only *connected* controllers are cast from — a hand
-anchor holds its last pose after its controller sleeps, which would otherwise let a stale pose
-steal the hover.
-
----
-
-### AvatarPlacer.cs
-
-The main entry point. When MRUK finishes scanning the room, this script finds the configured scene anchor (a `TABLE`/desk by default, but `COUCH`, `BED`, `FLOOR`, etc. can be selected) and spawns the avatar prefab on it.
+When MRUK finishes scanning the room, this finds the configured scene anchor (`spawnAnchorLabel` — a
+`TABLE`/desk by default, but `COUCH`, `BED`, `FLOOR`, … can be selected) and spawns the avatar there.
 
 **Responsibilities:**
-- Listens for MRUK scene-loaded callback
-- Searches room anchors for the configured surface type (`spawnAnchorLabel`)
-- Instantiates the avatar at the anchor position with a configurable offset and scale
-- Rotates the avatar to face the user (via `OVRCameraRig`)
-- Attaches `HeadLookAt` for gaze tracking
-- Locates the face mesh (by name or by blendshape search) and wires up `AgentVoiceController` with an `AudioSource`, face mesh, and mouth blendshape index
-- Auto-connects to the selected voice backend (ElevenLabs or OpenAI)
-- Exposes runtime control: `SetGazeTracking()`, `UpdateFacing()`, `SetScale()`
+- Resolves which of the four **avatar-variant prefabs** to spawn (Female/Male × Real/Toon), with a legacy
+  single-prefab fallback.
+- Instantiates the avatar, applies the uniform **scale**, and snaps its **contact point** to the surface —
+  *feet on surface* (standing/miniature) or *hips on cushion* (seated/life-sized) — measured after scale +
+  pose so placement is scale-independent.
+- Attaches the **Scale-condition Animator Controller** (`humanSizedAnimator` / `miniatureAnimator`) and
+  warns if it lacks the body-gesture triggers or if scale looks inconsistent with the condition.
+- Rotates the avatar to face the user (via `OVRCameraRig`).
+- Sets two shader globals for the toon look: `_OutlineScale` (outline thickness ∝ avatar scale) and
+  `_ToonKeyDir` (a virtual key light from `toonKeyLocalDirection`, kept glued to the avatar's facing).
+- Wires the runtime plumbing: points **SALSA Eyes** at the user for gaze, feeds the playback audio to
+  **SALSA** for lip-sync (via `SalsaExternalAudioFeed`), links `ElevenLabsEmoteBridge` to the avatar's
+  `EmoterController`, sets up the spatial `AudioSource`, and auto-connects the voice backend.
+- Exposes runtime control: `SetGazeTracking()`, `UpdateFacing()`, `SetScale()`, `SetScaleCondition()`.
 
-**Inspector fields:** `avatarPrefab`, `cameraRig`, `spawnAnchorLabel`, `positionOffset`, `avatarScale`, `faceMeshName`, `mouthBlendShapeName`
+When `useSalsaLipSync` is on (the default for the CC prefab), SALSA owns the mouth and
+`AgentVoiceController`'s built-in RMS lip-sync is disabled so the two never fight.
 
----
+#### AvatarBodyGestures.cs
 
-### HeadLookAt.cs
+Drives the avatar's **body** animations from ElevenLabs events, through `EmoterController → animDriver →
+Animator` triggers (`WaveTrigger` / `GestureTrigger` / `HeadNodTrigger`):
 
-Rotates the avatar's head bone toward a target (the user's head) in `LateUpdate`, blending on top of whatever animation is playing.
+- **Greeting wave** once each time a conversation connects (`OnConnected`).
+- On each **new agent response** (`OnNewResponse`) there is a configurable chance (`gestureChance`) to play
+  a gesture at all; `headNodShare` then splits it between a head-nod and the talking gestures. It only
+  fires when the avatar is resting in an idle it can gesture out of, and drops stale triggers so a gesture
+  can't fire late (after the agent has gone quiet). Adapts to whichever Scale-condition controller is
+  attached (e.g. falls back if the controller has no `Gesture2Trigger`).
 
-**Key features:**
-- Auto-detects the head bone from the `Animator` (`HumanBodyBones.Head`)
-- Weighted blend (`weight` 0-1) so the head only partially turns
-- Horizontal and vertical angle limits to prevent unnatural over-rotation
-- Smooth interpolation via `Quaternion.Slerp` at a configurable `smoothSpeed`
-- Graceful blend-out when disabled — the head smoothly returns to animation control instead of snapping
+The `EmoterController` is resolved lazily from `AvatarPlacer`'s spawned instance — no manual wiring.
+(This replaces the deleted `GestureTrigger.cs`, which was incompatible with the ElevenLabs event model.)
 
-**Public API:** `SetEnabled(bool)` — enables/disables tracking with smooth transitions
+### Voice pipeline
 
----
+#### AgentVoiceController.cs
 
-### AgentVoiceController.cs
+Central controller for voice interaction: microphone capture, streamed audio playback, and (fallback)
+lip-sync. Works with either `ElevenLabsConnection` or `RealtimeAPIConnection`.
 
-Central controller for voice interaction. Handles microphone capture, audio playback, and lip sync. Works with either `ElevenLabsConnection` or `RealtimeAPIConnection`.
+- **Mic:** captures the Quest mic as a ring buffer, converts float PCM → PCM16 base64, and streams it to
+  the active backend. `micGain` / `noiseGateThreshold` tune input; `SetMicMuted()` can suppress sending
+  without stopping the hardware. While the agent speaks the mic is normally muted (half-duplex), but with
+  **barge-in** enabled on the connection it keeps streaming so the user can interrupt.
+- **Playback:** streams received PCM16 chunks through a `ConcurrentQueue<float>` into a read-callback
+  `AudioClip`, pre-buffering `preBufferSamples` to avoid stutter and padding `drainDelaySeconds` of silence
+  so the last word isn't clipped; clears the queue on interruption.
+- **Lip-sync (fallback only):** an RMS-amplitude mouth blendshape driver, **used only when
+  `AvatarPlacer.useSalsaLipSync` is off**. In the study build SALSA owns the mouth, so this is disabled
+  (face mesh passed as null).
 
-**Microphone capture:**
-- Captures audio from the Quest's mic as a ring buffer (`Microphone.Start`)
-- Converts float PCM to PCM16 base64 and sends it to the active voice backend
-- Configurable `micGain` (amplification) and `noiseGateThreshold` (silence filtering)
-- Suppresses mic input while the AI is speaking to avoid echo/self-interruption
-- `isMicMuted` flag allows the experimenter to mute the mic without stopping hardware recording
+**Public API:** `Initialize()`, `StartListening()`, `StopListening()`, `SetMicMuted(bool)`.
 
-**Audio playback:**
-- Receives base64 PCM16 audio chunks from the voice API
-- Streams audio via a `ConcurrentQueue<float>` fed into an `AudioClip` PCM read callback
-- Pre-buffers a configurable number of samples (`preBufferSamples`) before starting playback to avoid stuttering
-- Adds silent padding (`drainDelaySeconds`) after the AI finishes speaking so hardware DSP doesn't cut off the last word
-- Handles interruptions by clearing the queue and stopping playback immediately
+#### ElevenLabsConnection.cs
 
-**Lip sync:**
-- Reads `AudioSource.GetOutputData` RMS amplitude each frame
-- Maps amplitude to a mouth-open blendshape weight via `mouthSensitivity`
-- Smoothly interpolates mouth movement with `mouthSmoothSpeed`
+WebSocket client for the [ElevenLabs Conversational AI](https://elevenlabs.io) agent API. The agent's
+persona, voice, language, and first message live in the ElevenLabs dashboard; this script connects,
+streams audio, and injects the per-trial task.
 
-**Public API:** `Initialize()`, `StartListening()`, `StopListening()`, `SetMicMuted(bool)`
+- **Task injection.** `taskKey` (`low_A` … `high_H`) selects a scenario from the built-in `TASK_BLOCKS`
+  table (Traditional Chinese, sourced from `swot_chinese.md`); the resolved `taskContext` is sent as the
+  `{{task_context}}` dynamic variable at conversation initiation. `conversation_config_override` is kept
+  **empty on purpose** — the persona must be byte-identical across every visual cell. `RestartWithTask()`
+  applies a new task to a live session by reconnecting (dynamic variables are read only at init).
+- **Barge-in.** `allowInterruption` (default on) keeps the mic streaming during agent speech and honours
+  `interruption` events. **Requires headphones on Quest** or the open mic hears the avatar and self-
+  interrupts.
+- **Events consumed by the rest of the system:** `OnConnected` (greeting), `OnNewResponse` (gesture
+  choice), `OnTranscriptDone` (facial emote + log), `OnUserTranscript`, `OnAudioDelta/Done`,
+  `OnInterruption`, `OnError`, `OnAnyServerEvent`.
+- **Server events handled:** `conversation_initiation_metadata`, `audio`, `agent_response`,
+  `agent_response_correction`, `user_transcript`, `interruption`, `agent_response_end`, `mode_change`,
+  `ping`.
+- **Public API:** `Connect()` / `Disconnect()`, `SendAudio()`, `SendTextMessage()`,
+  `SendContextualUpdate()`, `SendActivityPing()`, `TriggerAgentInitiation()`, `SetTaskByKey()`,
+  `RestartWithTask()`.
 
-**Inspector fields:** `backend` (OpenAI / ElevenLabs), `sampleRate`, `micGain`, `noiseGateThreshold`, `preBufferSamples`, `drainDelaySeconds`, `mouthSensitivity`, `mouthSmoothSpeed`
+#### RealtimeAPIConnection.cs
 
----
+WebSocket client for the [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime). The
+alternative voice backend, kept for comparison; the study runs on ElevenLabs. Configures voice, PCM16
+audio, Whisper transcription, and server-side VAD, and exposes `Connect()`/`Disconnect()`, `SendAudio()`,
+`SendEvent()`, and `MakeAISpeak()`.
 
-### ElevenLabsConnection.cs
+#### SalsaExternalAudioFeed.cs
 
-WebSocket client for the [ElevenLabs Conversational AI](https://elevenlabs.io) agent API. The agent's personality, voice, language, and first message are configured in the ElevenLabs dashboard — this script just connects and streams audio.
+Bridges streamed playback into SALSA. `AgentVoiceController` plays the agent's voice through a read-
+callback `AudioClip` that SALSA can't sample directly, so SALSA is switched to **external analysis** and
+fed the live output amplitude of the playback `AudioSource` each frame — mouth animation that tracks
+whatever the agent is currently saying, with no need for the finished clip.
 
-**Connection flow:**
-1. Opens a WebSocket to `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=...`
-2. Sends `conversation_initiation_client_data` to use dashboard defaults
-3. Enters a receive loop, dispatching events to the main thread via `ConcurrentQueue<Action>`
+### Emotes, gestures & gaze
 
-**Server events handled:** `conversation_initiation_metadata`, `audio`, `agent_response`, `user_transcript`, `interruption`, `agent_response_end`, `mode_change`, `ping`
+#### ElevenLabsEmoteBridge.cs
 
-**Public API:**
-- `Connect()` / `Disconnect()` — lifecycle
-- `SendAudio(base64)` — stream mic audio to the agent
-- `SendTextMessage(text)` — send text as if the user spoke (triggers a response)
-- `SendContextualUpdate(text)` — silently inform the agent without triggering a response
-- `SendActivityPing()` — prevent session timeout during passive phases
-- `TriggerAgentInitiation()` — two-step initiation: contextual update + user message to make the agent start talking naturally
+Parses the agent transcript for a leading Eleven v3 emotion tag (`[happy]`, `[sad]`, `[empathetic]`,
+`[thoughtful]`, …) and fires the matching facial emote on the avatar's `EmoterController`, bucketed into
+*Positive / Negative / Neutral / Thinking* (with a configurable fallback when no tag is present). With the
+"Eleven v3 Conversational" model and "strip audio tags" off, those tags are both spoken with the matching
+delivery and still arrive in the transcript for parsing. `AvatarPlacer` links it to the avatar via
+`SetEmoter()`.
 
-**Inspector fields:** `agentId`, `apiKey` (optional, for private agents), `inputSampleRate`, `outputSampleRate`
+> Facial emotes (this script) and body gestures (`AvatarBodyGestures`) run on separate channels, so the
+> avatar can talk, emote, and gesture at once.
 
----
+### UI & logging
 
-### RealtimeAPIConnection.cs
+#### SwotPanel.cs
 
-WebSocket client for the [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime). Alternative voice backend to ElevenLabs.
+The participant's world-space **SWOT sheet**, rendered with TextMeshPro (SDF) so it stays crisp at any
+scale. It reads `ElevenLabsConnection.taskKey` at show-time so panel and agent can't drift onto different
+tasks, and is revealed by a **Controller Buttons Mapper** (B/Y) wired to `ShowSwot()`, then auto-hides.
+The canvas is its **own root object** sized in absolute meters, so it's identical across the Scale/Render
+conditions (it's a measurement instrument). Default anchor mode rides the participant's controller like a
+held sheet of paper; a Head anchor mode world-locks it in front of the participant as a fallback. Content
+is zh-TW and requires a CJK TMP font in `fontOverride`; `demoBlankContent` blanks the quadrants for the
+practice build.
 
-**Connection flow:**
-1. Opens a WebSocket to `wss://api.openai.com/v1/realtime?model=...` with Bearer auth
-2. Sends a `session.update` event configuring voice, audio format (PCM16), Whisper transcription, and server-side VAD
-3. Enters a receive loop
+#### ConversationLogger.cs
 
-**Server events handled:** `session.created`, `session.updated`, `response.audio.delta`, `response.audio.done`, `response.audio_transcript.delta/done`, `conversation.item.input_audio_transcription.completed`, `error`, `input_audio_buffer.speech_started/stopped`
+Writes a per-session log to a **file on the headset**
+(`Application.persistentDataPath/ConversationLogs/<participant>/…jsonl`) so you get the full transcript +
+timing from a standalone APK. Subscribes to `ElevenLabsConnection` events and writes **JSONL** (one record
+per line): session start/end, connect/disconnect, conversation-init metadata (conversation id, audio
+formats, task key), user/agent messages, the agent's precise speaking interval, interruptions/corrections,
+and errors — each stamped with wall-clock ISO-8601 time and ms-since-start. Can also mirror the whole Unity
+console to a companion `.log`. Identity is read from `StudyControlPanel`. Retrieve with `adb pull` (or
+`Tools/pull-logs.ps1`) over USB — no Quest Link needed.
 
-**Public API:**
-- `Connect()` / `Disconnect()` — lifecycle
-- `SendEvent(object)` — send any JSON event
-- `SendAudio(base64)` — stream mic audio
-- `MakeAISpeak(prompt)` — inject a user message and trigger a response (for agent-initiated conversation)
+### Supporting / legacy scripts
 
-**Inspector fields:** `apiKey`, `model`, `voice`, `instructions`
-
----
-
-### ExperimenterRemoteTrigger.cs
-
-UDP server that listens for commands from the experimenter's PC/laptop, enabling remote control of the agent during study sessions. Both devices must be on the same WiFi network.
-
-**Supported commands:**
-
-| Command | Description |
-|---|---|
-| `INITIATE` | Trigger agent-initiated conversation (default prompt) |
-| `INITIATE:custom text` | Trigger with custom context |
-| `CONTEXT:some info` | Silent contextual update (no response) |
-| `PING` | Manual activity ping |
-| `END_CONVERSATION` | AI wraps up and says goodbye |
-| `STATUS` | Returns current connection and mic status |
-| `MIC:ON` / `MIC:OFF` | Mute/unmute user microphone |
-| `GAZE:ON` / `GAZE:OFF` | Enable/disable avatar gaze tracking |
-
-**Network:** Listens on UDP port `9100` (configurable). The Quest's IP is logged to the console on startup. Replies are sent back to the experimenter's address.
-
-**Auto keep-alive:** Optionally sends `user_activity` pings every 25 seconds to prevent ElevenLabs session timeout during passive co-presence phases.
-
----
-
-### SimpleAutoBlinker.cs
-
-Coroutine-based auto-blink animation. Drives a blink blendshape through close-hold-open cycles at random intervals.
-
-**Key features:**
-- Searches child objects for the face mesh by name, with fallback to any mesh containing the specified blendshape
-- Supports both standard (0=open, 100=closed) and inverted blendshape ranges
-- Auto-corrects `openValue` at runtime if the Animator has already set a non-zero rest pose
-- Configurable timing: `minInterval`/`maxInterval` between blinks, `closeSeconds`, `closedHoldTime`, `openSeconds`
-
-**Inspector fields:** `faceMeshName`, `blinkShapeName`, `openValue`, `closedValue`, timing parameters
-
----
-
-### GestureTrigger.cs
-
-Plays a random upper-body gesture animation each time the AI starts speaking. Uses an Animator `Int` parameter (`GestureIndex`) instead of triggers to avoid Unity's known issue with trigger consumption.
-
-**How it works:**
-1. Detects the rising edge of `AgentVoiceController.IsAISpeaking`
-2. Picks a random gesture index (avoiding repeats)
-3. Sets `GestureIndex` on the Animator
-4. Waits for the Animator to leave `GestureIdle`, then resets `GestureIndex` to -1
-5. The gesture plays once (non-looping) and returns to idle via exit-time transitions
-
-**Animator requirements:**
-- Int parameter `GestureIndex` (default -1)
-- Gesture layer (index 1) with an upper-body avatar mask
-- Default state `GestureIdle` with transitions to `Gesture1`, `Gesture2`, `Gesture3` based on `GestureIndex` value
-- Return transitions from each gesture back to `GestureIdle` using Has Exit Time
-
-**Inspector fields:** `animator`, `voiceController`, `gestureCount`, `gestureLayerIndex`
+- **EmoterController.cs / animDriver.cs** (`../ECA/emoter files/`) — the avatar-side emote/gesture layer
+  the bridges and `AvatarBodyGestures` invoke; expose the `emoterEvent*` / `waveAnim` / `gestureAnim` /
+  `headnodAnim` hooks and drive the Animator through `animDriver`.
+- **IdleVariantSwitcher.cs** — swaps between idle variants (e.g. hands-on-thigh) on the gesture layer.
+- **SceneDepthOccluder.cs** — helper for the Depth-API occlusion setup.
+- **HeadImageTag.cs** — the older baked-PNG info tag, superseded by `SwotPanel` (kept for reference).
+- **EmoteDebugger.cs** — on-screen readout of what `ElevenLabsEmoteBridge` detected, for diagnosis.
+- **HeadLookAt.cs** — *legacy.* Head-bone gaze that predated SALSA Eyes; no longer wired by `AvatarPlacer`
+  because it fought SALSA over the head bone. Gaze now comes from SALSA's Eyes module.
+- **SimpleAutoBlinker.cs** — *legacy.* Coroutine blink driver; blinking is now handled by SALSA's rebuilt
+  eyelid expressions (both eyes), so this is not attached in the study prefabs.
 
 ## Dependencies
 
-- **Meta XR SDK** — `OVRCameraRig`, MRUK (`Meta.XR.MRUtilityKit`)
-- **Newtonsoft JSON** (`com.unity.nuget.newtonsoft-json`) — WebSocket message serialization
-- **Unity Input System** — required by Meta XR SDK
+- **Meta XR SDK** — `OVRCameraRig`, MRUK (`Meta.XR.MRUtilityKit`) for scene understanding, Depth API
+  (`EnvironmentDepthManager`) for occlusion.
+- **SALSA LipSync** (Crazy Minnow Studio) — `Salsa` / `Emoter` / `Eyes` for lip-sync, facial emotes,
+  gaze, and blink.
+- **Newtonsoft JSON** (`com.unity.nuget.newtonsoft-json`) — WebSocket message + log serialization.
+- **Unity Input System** — required by Meta XR SDK.
+- **Built-in Render Pipeline (BiRP)** — the avatar's toon/occlusion shaders target BiRP (see
+  `Assets/Toon Shaders/README.md`).

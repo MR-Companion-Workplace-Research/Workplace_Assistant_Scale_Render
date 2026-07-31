@@ -80,12 +80,14 @@ These are load-bearing — breaking them confounds the manipulation:
 
 ## Tech stack
 
-- **Engine:** Unity (URP), Meta XR SDK, Animation Rigging
+- **Engine:** Unity (Built-in Render Pipeline / BiRP), Meta XR SDK, SALSA LipSync
 - **Hardware:** Meta Quest 3 (passthrough MR); participant-facing MR panels
 - **Avatars:** Character Creator 4, Mixamo animations, lip-sync asset
 - **Conversational AI:** ElevenLabs Conversational AI — per-trial task injection via dynamic variables
   (`{{task_context}}`)
-- **Experiment control:** semi-Wizard-of-Oz experimenter control for phase/trial transitions
+- **Experiment control:** the participant selects the run's task on an in-headset launch menu; session
+  pacing (follow-up count + 5-min cap) is held identical across conditions, so timing never cues the
+  manipulation
 
 ---
 
