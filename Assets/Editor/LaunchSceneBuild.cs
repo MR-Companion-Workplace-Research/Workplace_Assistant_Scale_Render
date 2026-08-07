@@ -10,7 +10,7 @@ using UnityEngine;
 ///
 /// WHY GENERATED RATHER THAN HAND-BUILT: the scene is almost entirely a stock OVRCameraRig
 /// plus one script — the interesting part (the panel) is built at runtime by LaunchMenu, the
-/// same way SwotPanel builds itself. Generating it means the passthrough setup (underlay layer,
+/// same way TaskPanel builds itself. Generating it means the passthrough setup (underlay layer,
 /// transparent camera clear, floor-level tracking) is applied identically every time instead of
 /// being a checklist someone has to remember, and re-running fixes a scene that got broken.
 ///
@@ -33,7 +33,7 @@ public static class LaunchSceneBuild
     private const string RigPrefabPath   = "Packages/com.meta.xr.sdk.core/Prefabs/OVRCameraRig.prefab";
 
     // The menu is in Traditional Chinese, and the default TMP font (LiberationSans) has no CJK
-    // glyphs — every character would render as a blank box. This is the same asset SwotPanel
+    // glyphs — every character would render as a blank box. This is the same asset TaskPanel
     // uses, so the two panels look like one system. Wired automatically because forgetting it
     // produces a menu that is visibly broken only once it is on the headset.
     private const string CjkFontPath = "Assets/Fonts/msjh SDF.asset";

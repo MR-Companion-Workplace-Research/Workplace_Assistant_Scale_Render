@@ -20,24 +20,31 @@ Launch_Scene                                          MR_Scene
 |---|---|---|
 | Participant ID | `STUDY SETUP` in Launch_Scene | once per participant, before the build |
 | Scale / Render Style / placement | `STUDY SETUP` in Launch_Scene | once per participant, before the build |
-| Task (A–H) | the in-headset launch menu | every run, by the participant |
+| Task PAIR (first + second) | `STUDY CONTROL` in MR_Scene | once per build — **baked in** |
 
-Risk Level is within-subjects, so each participant runs several tasks. Selecting the task at
-runtime is what removes the Android rebuild that would otherwise be needed between trials.
+A session runs **two tasks back to back in one conversation**, chosen as First / Second on
+`STUDY CONTROL`. Note the trade this makes: the launch menu used to pick the task at runtime
+specifically so that changing tasks never needed a fresh Android build with the participant sitting in
+the headset. It no longer picks anything, so **changing the pair now means a rebuild**.
+
+There are two task families, and one component renders both: **P1–P4** are SWOT proposals
+(`swot_chinese.md`) and **I1–I4** are incident reports (`incident_chinese.md`). They differ only
+in the four component headers — 優勢/劣勢/機會/威脅 versus 事故細節/立即影響/造成原因/潛在公司損失.
 
 **STUDY SETUP lives in Launch_Scene, not MR_Scene**, because the menu displays the participant
 id — and while the menu is running MR_Scene isn't loaded, so its STUDY CONTROL object doesn't
 exist yet to be read from. Putting the config in the scene that boots first gives one edit point
 *and* a menu that can show it, with no second copy to drift.
 
-The launch menu shows the participant id (`受試者ID：P07`) and eight bare `任務 A`…`任務 H`
-buttons. It shows **neither the condition nor the task names** — either would reveal the
-manipulation (see the class header on `LaunchMenu.cs`).
+The launch menu shows the participant id (`受試者ID：P07`) and a START button. It shows **neither the
+condition nor anything about the tasks** — either would reveal the manipulation (see the class header on
+`LaunchMenu.cs`). It used to carry a `任務 P1`…`任務 I4` grid; with the pair now set on `STUDY CONTROL`
+there is nothing left to choose, so the grid is gone and the menu is purely the entry point.
 
-The menu is in Traditional Chinese, matching `SwotPanel`, and uses the same `Assets/Fonts/msjh
+The menu is in Traditional Chinese, matching `TaskPanel`, and uses the same `Assets/Fonts/msjh
 SDF` asset (wired automatically by the scene generator). That atlas is **static**: characters
 not baked into it do not render and do not fall back. If you reword `instruction`, verify the
-new characters actually appear on the headset. The task *letters* stay Latin so they match what
+new characters actually appear on the headset. The task *keys* stay Latin so they match what
 the researcher says aloud and what the task keys and log files use.
 
 Regenerate the scene with **Tools > Study > Create or Refresh Launch Scene**.
@@ -49,7 +56,7 @@ session every one of them is overwritten at `Awake`, so don't configure a partic
 ### Practice app
 
 The practice APK mirrors the same two-scene flow, so participants rehearse the *whole* process
-rather than just the SWOT button:
+rather than just the task-sheet button:
 
 ```
 DemoLaunch_Scene  ──►  DemoScene
@@ -58,9 +65,9 @@ DemoLaunch_Scene  ──►  DemoScene
 
 Its menu shows `練習模式` instead of a participant id (the APK is built once and sideloaded to
 every headset), has its `STUDY SETUP` object **deleted** — so no participant's identity or
-condition is compiled into it — and loads `DemoScene`. The A–H buttons are kept
-and stay bare letters — practising the choice reveals no task content. `SwotPanel` runs with
-`demoBlankContent`, so the sheet shows its headers with empty quadrants.
+condition is compiled into it — and loads `DemoScene`. The P1–P4 / I1–I4 buttons are kept
+and stay bare keys — practising the choice reveals no task content. `TaskPanel` runs with
+`demoBlankContent`, so the sheet shows its headers with empty cells.
 
 Regenerate both with **Tools > Study > Create or Refresh Demo Scene** (needs `Launch_Scene` to
 exist first).
@@ -83,7 +90,7 @@ StudyControlPanel  ("STUDY CONTROL")           ← pulls config from StudySessio
  ├── ElevenLabsEmoteBridge                       parses [emotion tags] in transcript → facial emote
  ├── AvatarBodyGestures                          connection/response events → wave / gesture / head-nod
  ├── ConversationLogger                          on-device JSONL transcript + timing log
- └── SwotPanel                                   world-space SWOT sheet, controller-triggered
+ └── TaskPanel                                   world-space task sheet, controller-triggered
 ```
 
 Lip-sync, gaze, and blinking all live in **SALSA** on the avatar prefab (rebound to each new CC avatar
@@ -187,11 +194,31 @@ WebSocket client for the [ElevenLabs Conversational AI](https://elevenlabs.io) a
 persona, voice, language, and first message live in the ElevenLabs dashboard; this script connects,
 streams audio, and injects the per-trial task.
 
-- **Task injection.** `taskKey` (`low_A` … `high_H`) selects a scenario from the built-in `TASK_BLOCKS`
-  table (Traditional Chinese, sourced from `swot_chinese.md`); the resolved `taskContext` is sent as the
-  `{{task_context}}` dynamic variable at conversation initiation. `conversation_config_override` is kept
-  **empty on purpose** — the persona must be byte-identical across every visual cell. `RestartWithTask()`
-  applies a new task to a live session by reconnecting (dynamic variables are read only at init).
+- **Task injection — TWO tasks per session, one conversation.** `firstTaskKey` and `secondTaskKey`
+  (`P1`…`P4`, `I1`…`I4`) select scenarios from `TASK_BLOCKS` (Traditional Chinese, from
+  `swot_chinese.md` / `incident_chinese.md` — the 任務摘要 paragraph only, never the four components,
+  which are the participant's to raise). Each is composed as its deliverable line plus the summary:
+
+  ```
+  任務：專案提案
+
+  我被要求準備一份論證報告，為用於推動「企業客戶入駐流程最佳化」計畫爭取…
+  ```
+
+  and both are sent at initiation as `{{first_task_context}}` and `{{second_task_context}}`. **Both go
+  up front because they have to**: dynamic variables are read once at initiation and cannot be updated
+  on a live session, so feeding the second task in later would mean dropping the conversation and its
+  history — exactly what must not happen between the two tasks. `conversation_config_override` is kept
+  **empty on purpose** — the persona must be byte-identical across every visual cell.
+- **Task hand-over.** The agent is prompted to say a fixed line when it moves the participant from the
+  first task to the second. `CheckTaskSwitchPhrase` watches the agent transcript for any of
+  `taskSwitchPhrases`, and on a hit flips `CurrentTaskKey` to the second task and raises
+  `OnTaskAdvanced` — which is what makes the participant's sheet follow. Matching **strips whitespace
+  and punctuation and looks for a substring**, because the line is LLM-generated and arrives with
+  drifting punctuation and not reliably in the script it was written in; list Simplified *and*
+  Traditional variants. Nothing is sent to the agent — it is already driving the hand-over; only the
+  study's idea of "current task" moves. `AdvanceToSecondTask()` is public, so wire it to a researcher
+  button if the wording ever drifts past the matcher.
 - **Barge-in.** `allowInterruption` (default on) keeps the mic streaming during agent speech and honours
   `interruption` events. **Requires headphones on Quest** or the open mic hears the avatar and self-
   interrupts.
@@ -235,15 +262,85 @@ delivery and still arrive in the transcript for parsing. `AvatarPlacer` links it
 
 ### UI & logging
 
-#### SwotPanel.cs
+#### TaskPanel.cs
 
-The participant's world-space **SWOT sheet**, rendered with TextMeshPro (SDF) so it stays crisp at any
+The participant's world-space **task sheet**, rendered with TextMeshPro (SDF) so it stays crisp at any
 scale. It reads `ElevenLabsConnection.taskKey` at show-time so panel and agent can't drift onto different
-tasks, and is revealed by a **Controller Buttons Mapper** (B/Y) wired to `ShowSwot()`, then auto-hides.
+tasks. It logs a `panel_shown` marker (task key as detail) every time it appears.
+
+**Placement: world-fixed beside the avatar (2026-08-05).** `AnchorMode.Avatar` is the default and
+`alwaysVisible` is on, so the sheet appears on the participant's **right of the virtual human** as soon
+as `AvatarPlacer` spawns it and stays up for the whole trial. Side clearance and height are **fractions
+of the avatar's height** (`avatarSideGapFraction` 0.02, `avatarHeightFraction` 0.90 ≈ beside the head), so the
+composition reads the same at either Scale; the **sheet's own size stays fixed in meters**.
+
+**The pose is computed once and stored in WORLD space — the sheet is bound to nothing.** Not to the
+head, not to the avatar. The avatar's position is an *input* to computing the pose once, not something
+the sheet follows. Four iterations landed there:
+
+1. recomputing per frame made the sheet *orbit* the avatar (the participant's-right axis comes from the
+   head-to-avatar vector) and wobble (billboarding re-aims at the centre-eye anchor, which swings on the
+   neck, so even a pure head turn translates it);
+2. a **world** snapshot stopped that but **teleported on head turns** — not because world space was
+   wrong, but because `MeasureAvatar` used to clear `placed` on every re-measure, and the Animator (on
+   the avatar's *root*, `m_ApplyRootMotion: 1`) rewrites that transform every frame and so tripped the
+   measurement cache constantly; re-placing then re-read the camera. With `m_CullingMode: 1`
+   (`CullUpdateTransforms`) the writes also resume in a lurch as the avatar re-enters view — hence "a few
+   frames after I turn my head". **Fixed at source: re-measuring no longer disturbs a placement**;
+3. binding the offset to the **avatar** cured the teleport but glued the sheet to a transform that root
+   motion jiggles every frame, so it visibly bobbed along with the idle animation — worst in the
+   miniature cell, where the avatar is much closer to the eye and the same wobble covers more of the view;
+4. so: a plain world pose, attached to nothing.
+
+The sheet therefore does **not** track the avatar if the idle animation drifts it — that is the point.
+`ShowPanel()` is the only thing that re-places it, so **B/Y means "re-place this for where I am now"**
+rather than "summon". In Avatar mode `faceCamera` no longer billboards; it only picks which fixed
+orientation is taken (on = square up with the participant at placement time, off = square up with the
+avatar). The avatar's
+extent is measured once, not per frame — live measurements breathe with the idle animation and would
+make the sheet drift.
+
+⚠️ **Measure the avatar from its BONES, never from `Renderer.bounds`.** A `SkinnedMeshRenderer` reports
+the mesh's *bind-pose* AABB unless `m_UpdateWhenOffscreen` is on (it is off on these Character Creator
+meshes, and enabling it costs a per-frame re-skin). The bind pose is a T-pose, so `female_real`'s body
+mesh has serialized bounds of **1.72 m wide × 1.70 m tall** — the arms are measured stretched out
+sideways even though the avatar in the room has them at its sides. Placing from that put the sheet
+**1.21 m out, 41° off-axis**, visibly detached from the avatar. `MeasureAvatar` now samples
+`Animator.GetBoneTransform` for the live pose (the rigs are `animationType: 3`, humanoid) and pads by 6%
+of the skeleton's height for flesh/hair/skull-top, giving **0.60 m and 23°**. A sanity guard warns and
+re-measures if the box comes back wider than 0.75× its height, i.e. T-pose proportions — which is what
+you get if the Animator has not posed the rig yet. Head and the two Controller ("held paper") modes are still there, and Avatar
+mode degrades to Head placement when there is no avatar (the practice build strips `AvatarPlacer`). The
+B/Y → `ShowPanel()` wiring is retained so turning `alwaysVisible` off restores summon-on-demand.
+
+**Tuning it.** Everything you would want to move is a public field on the `TASK PANEL` object and is
+picked up **live in Play mode** (`ApplyTuningChanges`) — without that, `panelWidthMeters` is only read
+when the canvas is built and the fractions only while the sheet is unplaced, so edits look inert.
+`avatarSideGapFraction` **may be negative**: the measured half-width carries a silhouette allowance
+sized for the skull, so negative values are how you tuck the sheet in against the shoulders. Note that
+widening the sheet pushes its *centre* out without moving its *near edge* — judge distance by the edge,
+which is what `avatarSideGapFraction` actually controls.
+
+⚠️ **Anchoring to the avatar makes apparent text size vary with the Scale IV** — this is why the mode was
+dropped on 2026-06-26 and it is back by explicit request. The sheet sits ~1.55 m away in the human-sized
+cell and ~0.86 m in the miniature one, so apparent text size differs 1.8× between them however big the
+sheet is. `panelWidthMeters` is now **0.50** (was 0.30), which puts the human-sized cell at ~27′ of arc —
+the threshold below which text was judged strained on Quest passthrough — and the miniature cell at ~47′.
+See the tooltip on `panelWidthMeters` for the arithmetic.
+
+**One component, both task families.** The sheet shows 職務 / 任務 and a 2×2 grid of four components;
+the only thing that varies is which four headers those cells carry (SWOT for `P*`, incident for `I*`).
+Everything the participant experiences — size, placement, fonts, colours, display time — is shared code,
+so the two families are identical by construction rather than by discipline. The four headers are all
+the **same colour**: colour-coding SWOT quadrants carries a valence the incident cells have no
+equivalent for. There is **one sheet size for every task** (1100×690 reference px → 0.30 × 0.19 m at
+the default width), sized for the longest content in the study, so `P*` sheets carry some blank space.
+The 任務摘要 paragraph is deliberately *not* on the sheet — the agent carries it (`TASK_BLOCKS`).
+
 The canvas is its **own root object** sized in absolute meters, so it's identical across the Scale/Render
 conditions (it's a measurement instrument). Default anchor mode rides the participant's controller like a
 held sheet of paper; a Head anchor mode world-locks it in front of the participant as a fallback. Content
-is zh-TW and requires a CJK TMP font in `fontOverride`; `demoBlankContent` blanks the quadrants for the
+is zh-TW and requires a CJK TMP font in `fontOverride`; `demoBlankContent` blanks the cells for the
 practice build.
 
 #### ConversationLogger.cs
@@ -264,7 +361,7 @@ console to a companion `.log`. Identity is read from `StudyControlPanel`. Retrie
   `headnodAnim` hooks and drive the Animator through `animDriver`.
 - **IdleVariantSwitcher.cs** — swaps between idle variants (e.g. hands-on-thigh) on the gesture layer.
 - **SceneDepthOccluder.cs** — helper for the Depth-API occlusion setup.
-- **HeadImageTag.cs** — the older baked-PNG info tag, superseded by `SwotPanel` (kept for reference).
+- **HeadImageTag.cs** — the older baked-PNG info tag, superseded by `TaskPanel` (kept for reference).
 - **EmoteDebugger.cs** — on-screen readout of what `ElevenLabsEmoteBridge` detected, for diagnosis.
 - **HeadLookAt.cs** — *legacy.* Head-bone gaze that predated SALSA Eyes; no longer wired by `AvatarPlacer`
   because it fought SALSA over the head bone. Gaze now comes from SALSA's Eyes module.

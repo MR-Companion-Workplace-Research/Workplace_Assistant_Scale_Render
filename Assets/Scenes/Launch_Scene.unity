@@ -210,7 +210,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   config:
-    participantId: T05
+    participantId: test
     conditionLabel: 
     avatarVariant: 0
     scaleCondition: 0

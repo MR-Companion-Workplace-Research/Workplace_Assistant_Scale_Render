@@ -631,6 +631,16 @@ public class AvatarPlacer : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The avatar instance spawned for this trial, or NULL until the MRUK OnSceneLoaded callback
+    /// has run — which is well after every Awake/Start, so anything reading this must poll or be
+    /// driven from a later event rather than caching it at startup.
+    ///
+    /// Exposed for <see cref="TaskPanel"/> in Avatar anchor mode, which places the participant's
+    /// task sheet beside the avatar and therefore has to wait for it to exist.
+    /// </summary>
+    public GameObject SpawnedAvatar => spawnedAvatar;
+
     public void UpdateFacing()
     {
         if (spawnedAvatar != null && cameraRig != null)

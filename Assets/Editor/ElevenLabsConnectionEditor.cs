@@ -22,7 +22,7 @@ public class ElevenLabsConnectionEditor : Editor
         serializedObject.Update();
 
         EditorGUILayout.HelpBox(
-            "Task is selected on the STUDY CONTROL panel (A..H) and pushed here at runtime. " +
+            "Task is selected on the STUDY CONTROL panel (P1..P4 / I1..I4) and pushed here at runtime. " +
             "The fields below are one-time agent config — set them once.",
             MessageType.Info);
 

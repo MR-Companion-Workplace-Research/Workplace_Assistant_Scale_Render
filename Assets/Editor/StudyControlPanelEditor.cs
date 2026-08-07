@@ -1,4 +1,4 @@
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 /// <summary>
@@ -31,17 +31,18 @@ public class StudyControlPanelEditor : Editor
         else
         {
             EditorGUILayout.HelpBox(
-                "DEV FALLBACK ONLY. In a real session every field above is overwritten at Awake:\n" +
-                "  • participant id + conditions  ←  STUDY SETUP in Launch_Scene\n" +
-                "  • task  ←  the participant's choice on the launch menu\n\n" +
-                "These values are used only when MR_Scene is opened directly, so it stays " +
-                "runnable on its own. To configure a participant, edit STUDY SETUP instead.",
+                "DEV FALLBACK ONLY for the identity and condition fields — in a real session " +
+                "those are overwritten at Awake by STUDY SETUP in Launch_Scene, and are used " +
+                "here only when MR_Scene is opened directly.\n\n" +
+                "THE TWO TASK FIELDS ARE NOT A FALLBACK: they are the real setting, and they are " +
+                "baked in at build time. To configure a participant's identity or conditions, " +
+                "edit STUDY SETUP instead.",
                 MessageType.Warning);
         }
 
         EditorGUILayout.HelpBox(
             $"Currently:  participant='{panel.participantId}'   condition='{panel.ResolvedConditionLabel}'\n" +
-            $"Task key:  '{panel.TaskKey}'",
+            $"Tasks:  1st '{panel.FirstTaskKey}'  →  2nd '{panel.SecondTaskKey}'",
             MessageType.None);
 
         if (GUILayout.Button("Apply To Scene Now"))

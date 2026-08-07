@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 /// <summary>
 /// Builds the PARTICIPANT PRACTICE app: a second, standalone APK that installs alongside the
 /// study app on the same headset and rehearses the WHOLE session flow — launch the app, pick a
-/// task on the menu, press START, then summon the SWOT sheet in MR — without exposing any task
+/// task on the menu, press START, then summon the task sheet in MR — without exposing any task
 /// content.
 ///
 /// It ships TWO generated scenes, mirroring the study app's two:
@@ -28,10 +28,10 @@ using UnityEngine.SceneManagement;
 /// MR_Scene or Launch_Scene (panel offset, width, font, display seconds, the button mapping)
 /// just re-run Create or Refresh Demo Scene.
 ///
-/// KNOWN LIMIT: stripping is at the SCENE level. SwotPanel's script still holds the SWOT text as
-/// string literals and that script ships in this APK, so "no task text in the practice build" is
-/// true of the scenes, not of the compiled assembly. What the participant can SEE is blank
-/// (demoBlankContent) and bare task letters — but do not treat the APK itself as scrubbed.
+/// KNOWN LIMIT: stripping is at the SCENE level. TaskPanel's script still holds the SWOT and
+/// incident text as string literals and that script ships in this APK, so "no task text in the
+/// practice build" is true of the scenes, not of the compiled assembly. What the participant can
+/// SEE is blank (demoBlankContent) and bare task labels — but do not treat the APK as scrubbed.
 ///
 /// USAGE
 ///   1. Tools > Study > Create or Refresh Launch Scene  (once, if Launch_Scene does not exist)
@@ -129,7 +129,7 @@ public static class DemoBuild
 
         // The one behavioural difference that remains: headers, no content.
         int panels = 0;
-        foreach (var panel in Object.FindObjectsOfType<SwotPanel>())
+        foreach (var panel in Object.FindObjectsOfType<TaskPanel>())
         {
             panel.demoBlankContent = true;
             EditorUtility.SetDirty(panel);
@@ -143,13 +143,13 @@ public static class DemoBuild
 
         string report = $"Demo scene written to {DemoScenePath}\n\n" +
                         $"Stripped {removed.Count} object(s):\n  " + string.Join("\n  ", removed) +
-                        $"\n\nSWOT panels set to blank content: {panels}" +
+                        $"\n\nTask panels set to blank content: {panels}" +
                         $"\n\n{launchReport}" +
                         $"\n\n{VerifyNoAvatarContent()}";
         Debug.Log("DemoBuild: " + report);
 
         if (panels == 0)
-            Debug.LogWarning("DemoBuild: no SwotPanel found in the demo scene — the practice app " +
+            Debug.LogWarning("DemoBuild: no TaskPanel found in the demo scene — the practice app " +
                              "would have nothing to show. Check that MR_Scene still has one.");
 
         // Leave the researcher back in the study scene: DemoScene is a generated artifact, and
@@ -171,9 +171,9 @@ public static class DemoBuild
     ///    every headset, so a baked-in id would be somebody else's);
     ///  - STUDY SETUP is deleted, so no participant's identity or condition is compiled in.
     ///
-    /// The A..H buttons are kept, and stay bare letters exactly as in the study. They carry no
-    /// task content — the labels are derived from the enum letter, never the scenario name — so
-    /// practising the choice reveals nothing about the tasks themselves.
+    /// The P1..P4 / I1..I4 buttons are kept, and stay bare labels exactly as in the study. They
+    /// carry no task content — the labels are derived from the enum's key prefix, never the
+    /// scenario name — so practising the choice reveals nothing about the tasks themselves.
     /// </summary>
     private static string CreateOrRefreshDemoLaunchScene()
     {
@@ -445,7 +445,7 @@ public static class DemoBuild
     /// <summary>The practice app is useless without the camera rig or the panel it summons.</summary>
     private static bool IsEssential(GameObject go) =>
         go.GetComponentInChildren<OVRCameraRig>(true) != null ||
-        go.GetComponentInChildren<SwotPanel>(true) != null;
+        go.GetComponentInChildren<TaskPanel>(true) != null;
 
     // =====================================================================
     //  2. Build the practice APK under its own name / package

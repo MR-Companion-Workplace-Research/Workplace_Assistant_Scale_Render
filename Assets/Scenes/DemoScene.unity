@@ -3864,7 +3864,7 @@ GameObject:
   - component: {fileID: 710824423}
   - component: {fileID: 710824425}
   m_Layer: 0
-  m_Name: SWOT Panel
+  m_Name: TASK PANEL
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3887,14 +3887,19 @@ MonoBehaviour:
   demoBlankContent: 1
   conversationLogger: {fileID: 0}
   displaySeconds: 10
-  anchorMode: 0
+  alwaysVisible: 1
+  anchorMode: 3
   faceCamera: 1
+  avatarPlacer: {fileID: 0}
+  avatarSide: 0
+  avatarSideGapFraction: 0.02
+  avatarHeightFraction: 0.9
   controllerLocalOffset: {x: 0, y: 0.04, z: 0.18}
   controllerTilt: {x: 40, y: 0, z: 0}
   viewDistance: 0.65
   lateralOffset: 0.32
   heightOffset: -0.08
-  panelWidthMeters: 0.3
+  panelWidthMeters: 0.5
   fontOverride: {fileID: 11400000, guid: bacbfb390bbd98f4784db621cf5d5b30, type: 2}
   useBuiltInInput: 0
   verboseLogging: 1
@@ -4020,15 +4025,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _buttonClickActions:
-  - Title: SWOT toggle
+  - Title: Task panel toggle
     Button: 2
     ButtonMode: 1
     Callback:
       m_PersistentCalls:
         m_Calls:
         - m_Target: {fileID: 710824423}
-          m_TargetAssemblyTypeName: SwotPanel, Assembly-CSharp
-          m_MethodName: ShowSwot
+          m_TargetAssemblyTypeName: TaskPanel, Assembly-CSharp
+          m_MethodName: ShowPanel
           m_Mode: 1
           m_Arguments:
             m_ObjectArgument: {fileID: 0}

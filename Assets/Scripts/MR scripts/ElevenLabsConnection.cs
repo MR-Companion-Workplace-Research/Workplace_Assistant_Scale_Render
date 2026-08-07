@@ -17,8 +17,11 @@ using Newtonsoft.Json.Linq;
 /// Setup:
 /// 1. Attach to a GameObject alongside AgentVoiceController.
 /// 2. Set your Agent ID (from ElevenLabs dashboard).
-/// 3. Set taskContext BEFORE calling Connect() (your experiment controller
-///    assigns it per trial from a TASK_BLOCKS dictionary).
+/// 3. Set firstTaskKey and secondTaskKey BEFORE calling Connect() (STUDY CONTROL does this).
+///    A session runs TWO tasks in ONE conversation: both are sent at initiation as
+///    {{first_task_context}} and {{second_task_context}}, and the agent hands over between
+///    them. Dynamic variables are read once at initiation and cannot be updated on a live
+///    session, which is why the second task cannot simply be sent later.
 /// 4. Call Connect() to start (auto-called by AvatarPlacer).
 /// </summary>
 public class ElevenLabsConnection : MonoBehaviour
@@ -38,25 +41,52 @@ public class ElevenLabsConnection : MonoBehaviour
     public int outputSampleRate = 16000;
 
     [Header("Interruption (barge-in)")]
-    [Tooltip("Allow the user to interrupt the agent WHILE it is speaking. When ON, the mic keeps " +
-             "streaming during agent speech and ElevenLabs 'interruption' events are honored, so " +
-             "talking over the agent stops it. IMPORTANT: on Quest, use HEADPHONES — otherwise the " +
-             "open mic hears the avatar's own voice and the agent self-interrupts. When OFF, the old " +
-             "half-duplex behavior is kept (mic muted during speech; no barge-in). Requires the " +
-             "'interruption' client event to be enabled on the agent in the ElevenLabs dashboard.")]
     public bool allowInterruption = true;
 
     [Header("Task Configuration")]
-    [Tooltip("Optional: select the task scenario by key from the built-in TASK_BLOCKS table " +
-             "(e.g. low_A, low_B, high_E …). If non-empty, it OVERRIDES taskContext when Connect() " +
-             "runs. Leave empty to type the scenario into taskContext directly.")]
-    public string taskKey = "";
+    [Tooltip("Key of the task the participant does FIRST (P1..P4 = SWOT proposals, " +
+             "I1..I4 = incident reports). Filled into {{first_task_context}}. Normally pushed " +
+             "here by STUDY CONTROL rather than typed — set it directly only for solo testing.")]
+    public string firstTaskKey = "";
 
-    [Tooltip("The current trial's task scenario. Filled into {{task_context}} in the agent's " +
-             "dashboard system prompt. Set this directly, or let taskKey populate it. Read once at " +
-             "conversation initiation — changing the task mid-session requires RestartWithTask().")]
-    [TextArea(4, 12)]
-    public string taskContext = "";
+    [Tooltip("Key of the task the participant does SECOND. Filled into {{second_task_context}}. " +
+             "BOTH tasks are handed to the agent up front, in one conversation — the agent is the " +
+             "one that moves the session from the first to the second.")]
+    public string secondTaskKey = "";
+
+    [Tooltip("Resolved text sent as {{first_task_context}}. Populated from firstTaskKey when " +
+             "Connect() runs; type into it directly only if you leave the key empty. Read once at " +
+             "conversation initiation — dynamic variables cannot be changed on a live session.")]
+    [TextArea(4, 10)]
+    public string firstTaskContext = "";
+
+    [Tooltip("Resolved text sent as {{second_task_context}}. Same rules as the first.")]
+    [TextArea(4, 10)]
+    public string secondTaskContext = "";
+
+    [Header("Task Switch Trigger")]
+    [Tooltip("The agent is prompted to say a fixed line when it moves the participant from the " +
+             "first task to the second. When any of these phrases appears in the agent's " +
+             "transcript, the session advances: CurrentTaskKey flips to the second task and the " +
+             "participant's sheet follows it.\n\n" +
+             "MATCH IS SUBSTRING, AFTER STRIPPING WHITESPACE AND PUNCTUATION, so wording around " +
+             "the phrase and any drift in commas or full stops does not matter. Keep each entry " +
+             "to a distinctive FRAGMENT rather than the whole sentence — the shorter and more " +
+             "specific it is, the less there is to drift. List Simplified AND Traditional " +
+             "variants: the agent's script is Simplified but the study build is zh-TW, and the " +
+             "model does not reliably keep one script.")]
+    public string[] taskSwitchPhrases =
+    {
+        // Only 个/個 and 报/報 differ between scripts here, so these four cover every way the
+        // fragment can come back. The mixed pair is not paranoia: the agent prompt itself is
+        // written in mixed script (那第一個…任务…), so the model has no consistent script to copy.
+        "另一个报告需要完成",   // Simplified, as scripted in the agent prompt
+        "另一個報告需要完成",   // Traditional, in case the model localizes it
+    };
+
+    [Tooltip("Turn OFF to disable automatic switching (the trigger phrase is then ignored and " +
+             "only AdvanceToSecondTask() moves the session on). Useful when piloting the wording.")]
+    public bool switchTaskOnPhrase = true;
 
     // WebSocket
     private ClientWebSocket ws;
@@ -85,30 +115,29 @@ public class ElevenLabsConnection : MonoBehaviour
 
     private static readonly Dictionary<string, string> TASK_BLOCKS = new Dictionary<string, string>
     {
-        // Chinese (zh-TW) study build. Source: swot_chinese.md.
-        // Written in the FIRST person (我被要求…) because this text is what the participant's
-        // side of the scenario looks like TO THE AGENT — the agent IS the AI workplace
-        // assistant, so the source doc's closing "你尋求AI 職場助理的協助…" line is dropped.
-        // CJK strings are kept on ONE line each: splitting them across concatenated lines
-        // risks silently inserting/losing a space inside a run of Chinese characters.
+        // ============ SWOT PROPOSALS ============
+        ["P1"] = "我被要求準備一份論證報告，為用於推動「企業客戶入駐流程最佳化」計畫爭取新台幣 6,400 萬元的資金。此計畫若能成功，可望大幅縮短營收實現時間、提升客戶留存率，並強化公司的競爭表現。由於我將參與領導這項計畫的執行，亮眼的成果可以提高我在高階主管面前的能見度、升遷機會，以及未來擔任領導職務的可能性；反之，若發生成本超支或執行失敗，則可能損害我的信譽，並降低我未來主導策略型計畫的機會。",
 
-        // ============ LOW RISK / LOW REWARD ============
-        ["low_A"]  = "我被要求準備一份報告，申請 NT$16,000 採購會議室的替換座椅，用於三樓會議室。雖然這並非緊急的安全問題，但該提案可以改善跨團隊合作時的舒適度與專業形象。",
+        ["P2"] = "我被要求準備一份論證報告，為一項將營運據點拓展至倫敦與北京的試行計畫爭取新台幣 9,600 萬的資金。此案若獲核准，可望帶來重大的成長機會，並讓我確立在公司國際策略中的領導地位。試辦計畫若成功，可以提高我在高階主管面前的能見度、決策權限與升遷機會；反之，若成效不彰，則可能造成重大損失、使更大規模的擴張計畫停滯，並損害管理階層對我策略判斷力的信心。",
 
-        ["low_B"]  = "我被要求準備一份報告，申請 NT$25,600 補充共用印表機及碳粉耗材。但該提案屬於例行性質且為日常營運所需，不太可能遭遇反對。",
+        ["P3"] = "我被要求準備一份論證報告，為將公司核心系統遷移至新的企業軟體平台爭取新台幣 4,800 萬。此案若獲核准，可望提升全公司的生產力，並確立我與我的團隊為推動全公司轉型的領導者。遷移作業若能順利完成，可以強化我在高階主管心目中的公信力，並提高我對未來科技投資的決策權；反之，若出現延宕、資安問題或營運中斷，則可能損害各方對我領導能力的信任，並降低我的升遷機會。",
 
-        ["low_C"]  = "我被要求準備一份簡要報告，從設施預算中申請 NT$38,400 以更換員工休息室中老舊的咖啡機。雖然更換咖啡機受到員工支持，但該提案對更廣泛的營運影響有限。",
+        ["P4"] = "我被要求準備一份論證報告，建議公司投入新台幣 8,000 萬元與溫莎銀行建立策略合作夥伴關係。此案若獲核准，可讓公司更快取得寶貴的資源、能力與市場觸及範圍。合作若能成功，可大幅提升我在高階主管心目中的聲譽、增強我對公司策略的影響力，並讓我有機會承擔更重要的領導職責；反之，若合作夥伴表現不如預期或投資報酬令人失望，則可能損害我的信譽，並限制我的升遷發展。",
 
-        ["low_D"]  = "我被要求寫一份報告，申請 NT$48,000 更換兩間會議室中損壞的白板。該提案規模較小，不太可能引起爭議。",
+        // ============ INCIDENT REPORTS ============
+        ["I1"] = "在我所監督的生產線上，一名員工在試圖清除自動包裝機內卡住的材料時，手部遭受嚴重傷害。該名員工需接受手術治療，生產線已停線。我必須撰寫一份詳細報告，說明事發經過、造成原因，以及防止再次發生所需採取的行動。由於我所負責的區域內先前可能已存在設備問題與安全程序執行不落實的情形，這次調查可能影響我的專業可信度、績效評估、升遷機會，以及後續的監督職責。",
 
-        // ============ HIGH RISK / HIGH REWARD ============
-        ["high_E"] = "我被要求準備一份說明報告，申請 NT$6,400 萬的資金，用於推動「企業客戶入駐流程最佳化」計畫。此計畫若成功，將能縮短營收實現週期、提升客戶留存率，並顯著推動該專案與我團隊的職涯發展。",
+        ["I2"] = "在我所負責的部門中，勒索軟體從一台員工工作站擴散至公司共用系統，導致數個部門的作業中斷。我必須撰寫一份資安事故報告，說明這起攻擊是如何發生的、為何會擴散，以及必須採取哪些立即與長期的應變措施。高階領導層可能會調查我的部門是否確實遵循規定的資安作業程序，調查結果可能影響我的聲譽、職涯發展、預算權限，以及是否能繼續擔任部門主管職務。",
 
-        ["high_F"] = "我被要求準備一份說明報告，申請 NT$9,600 萬的資金，用於一項將營運據點拓展至倫敦與北京的試行計畫。若獲核准，可望開啟重大的成長契機，並提升我與團隊的能見度；但若成效不佳，則可能使更大規模的擴張停滯。",
+        ["I3"] = "在我所管轄的維修作業區內，一個受損的工業清潔化學品容器破裂，導致兩名員工暴露於化學品中，廠區部分區域被迫關閉。其中一名員工需要住院治療。我必須撰寫一份報告，說明事件經過、找出造成原因，並提出矯正與預防措施。由於儲放區稽核與危害控制屬於我的職責範圍，這次調查可能導致我的決策受到正式審查，並可能影響我的績效評估、專業聲譽、升遷機會，或監督職位。",
 
-        ["high_G"] = "我被要求準備一份說明報告，申請 NT$4,800 萬將公司核心系統遷移至新的企業軟體平台。若獲批准，可望提升全公司的生產力，並使我的團隊成為重要變革的推動人物；但若導入過程出現問題，則可能引發外界對可行性的疑慮。",
+        ["I4"] = "我所監督的技術團隊發現，一項雲端設定錯誤導致客戶資料暴露給未經授權的外部使用者。我必須撰寫一份資安事故報告，說明這起資料外洩事件、促成其發生的因素，以及後續應採取的矯正措施。由於可能衍生法律、財務及商譽方面的後果，高階領導層可能會嚴格檢視我對團隊的監督情形。這次調查可能影響我在高層心目中的可信度、未來的升遷、決策權限，或是否能繼續領導該部門。",
+    };
 
-        ["high_H"] = "我被要求準備一份專案論證報告，建議公司投入 NT$8,000 萬與溫莎銀行建立策略夥伴關係。若獲批准，可望取得寶貴的資源，並增強我的專業地位；但若成效不佳，則可能在高階主管層面損及我的信譽。",
+    private static readonly Dictionary<string, string> TASK_TYPES = new Dictionary<string, string>
+    {
+        ["P1"] = "專案提案", ["P2"] = "專案提案", ["P3"] = "專案提案", ["P4"] = "專案提案",
+        ["I1"] = "事故報告", ["I2"] = "事故報告", ["I3"] = "事故報告", ["I4"] = "事故報告",
     };
 
     public async void Connect()
@@ -119,9 +148,10 @@ public class ElevenLabsConnection : MonoBehaviour
             return;
         }
 
-        // Resolve taskKey -> taskContext now, right before initiation, so there's no
+        // Resolve both task keys -> contexts now, right before initiation, so there's no
         // ordering race with AvatarPlacer's automatic Connect() call.
-        ResolveTaskContext();
+        ResolveTaskContexts();
+        CurrentTaskIndex = 0;   // every fresh conversation starts on the first task
 
         string url = $"wss://api.elevenlabs.io/v1/convai/conversation?agent_id={agentId}";
 
@@ -167,9 +197,8 @@ public class ElevenLabsConnection : MonoBehaviour
     /// We keep conversation_config_override EMPTY on purpose: the persona/tone/
     /// guardrails must be byte-identical across every Scale x Render Style cell so
     /// the visual manipulation is not confounded by prompt differences. The ONLY
-    /// per-trial variation is the task scenario, injected via the {{task_context}}
-    /// dynamic variable (the within-subject Risk Level manipulation lives entirely
-    /// in that string).
+    /// per-trial variation is the task scenarios, injected via the {{first_task_context}}
+    /// and {{second_task_context}} dynamic variables.
     /// </summary>
     private void SendConversationInitiation()
     {
@@ -178,87 +207,166 @@ public class ElevenLabsConnection : MonoBehaviour
             type = "conversation_initiation_client_data",
             // Keep empty — do NOT override the system prompt per condition.
             conversation_config_override = new { },
-            // Runtime value filled into {{task_context}} in the dashboard prompt.
+            // BOTH tasks go up front, in one shot. Dynamic variables are read once at
+            // initiation and cannot be changed on a live session, so there is no way to feed
+            // the second task in later without dropping the conversation and its history —
+            // which is exactly what the study must not do between the two tasks.
             dynamic_variables = new Dictionary<string, object>
             {
-                { "task_context", taskContext }
+                { "first_task_context", firstTaskContext },
+                { "second_task_context", secondTaskContext }
             }
         };
         SendRawJson(JsonConvert.SerializeObject(initEvent));
 
-        if (string.IsNullOrEmpty(taskContext))
+        WarnIfEmpty(firstTaskContext, "first_task_context", firstTaskKey);
+        WarnIfEmpty(secondTaskContext, "second_task_context", secondTaskKey);
+
+        if (!string.IsNullOrEmpty(firstTaskContext) && !string.IsNullOrEmpty(secondTaskContext))
         {
-            Debug.LogWarning("ElevenLabsConnection: taskContext is EMPTY at initiation. " +
-                "The agent will fall back to the dashboard placeholder default (set one!).");
+            Debug.Log($"ElevenLabsConnection: Initiation sent. " +
+                      $"first_task_context = '{firstTaskKey}' ({firstTaskContext.Length} chars), " +
+                      $"second_task_context = '{secondTaskKey}' ({secondTaskContext.Length} chars).");
         }
-        else
-        {
-            Debug.Log($"ElevenLabsConnection: Initiation sent. task_context = {taskContext.Length} chars.");
-        }
+    }
+
+    private static void WarnIfEmpty(string context, string variableName, string key)
+    {
+        if (!string.IsNullOrEmpty(context)) return;
+        Debug.LogWarning($"ElevenLabsConnection: {{{{{variableName}}}}} is EMPTY at initiation " +
+            $"(task key '{key}'). The agent will fall back to the dashboard placeholder default " +
+            "for it — set one, or that half of the session has no scenario.");
     }
 
     // =========================================================================
     //  Task selection
     // =========================================================================
 
-    /// <summary>
-    /// If taskKey is set, copy the matching scenario from TASK_BLOCKS into taskContext.
-    /// Called automatically at the start of Connect() so the value is always current
-    /// when the initiation event is sent — no ordering race with the auto-connect.
-    /// </summary>
-    private void ResolveTaskContext()
+    private void ResolveTaskContexts()
     {
-        if (string.IsNullOrEmpty(taskKey)) return; // using taskContext directly
+        if (!string.IsNullOrEmpty(firstTaskKey)) firstTaskContext = ComposeTaskContext(firstTaskKey) ?? firstTaskContext;
+        if (!string.IsNullOrEmpty(secondTaskKey)) secondTaskContext = ComposeTaskContext(secondTaskKey) ?? secondTaskContext;
 
-        if (TASK_BLOCKS.TryGetValue(taskKey, out string ctx))
+        if (!string.IsNullOrEmpty(firstTaskKey) && firstTaskKey == secondTaskKey)
         {
-            taskContext = ctx;
-            Debug.Log($"ElevenLabsConnection: Resolved taskContext from key '{taskKey}' ({ctx.Length} chars).");
-        }
-        else
-        {
-            Debug.LogError($"ElevenLabsConnection: taskKey '{taskKey}' not found in TASK_BLOCKS. " +
-                $"Valid keys: {string.Join(", ", TASK_BLOCKS.Keys)}. Leaving taskContext unchanged.");
+            Debug.LogWarning($"ElevenLabsConnection: first and second task are BOTH '{firstTaskKey}'. " +
+                "The participant will be given the same scenario twice — check STUDY CONTROL.");
         }
     }
-
-    /// <summary>
-    /// Programmatically select the trial's task by key (e.g. "low_A", "high_E").
-    /// Sets both taskKey and taskContext. Returns false if the key is unknown.
-    /// Call BEFORE Connect(), or use RestartWithTask() to apply it to a live session.
-    /// </summary>
-    public bool SetTaskByKey(string key)
+    private string ComposeTaskContext(string key)
     {
-        if (string.IsNullOrEmpty(key))
+        if (!TASK_BLOCKS.TryGetValue(key, out string summary))
         {
-            Debug.LogError("ElevenLabsConnection: SetTaskByKey called with an empty key.");
-            return false;
+            Debug.LogError($"ElevenLabsConnection: task key '{key}' not found in TASK_BLOCKS. " +
+                $"Valid keys: {string.Join(", ", TASK_BLOCKS.Keys)}. Leaving that context unchanged.");
+            return null;
         }
 
-        if (!TASK_BLOCKS.TryGetValue(key, out string ctx))
+        if (!TASK_TYPES.TryGetValue(key, out string taskType))
         {
-            Debug.LogError($"ElevenLabsConnection: Unknown task key '{key}'. " +
-                $"Valid keys: {string.Join(", ", TASK_BLOCKS.Keys)}.");
-            return false;
+            Debug.LogError($"ElevenLabsConnection: task key '{key}' is in TASK_BLOCKS but missing " +
+                "from TASK_TYPES — sending the scenario without its 任務 line. Add it.");
+            return summary;
         }
 
-        taskKey = key;
-        taskContext = ctx;
-        return true;
+        return $"任務：{taskType}\n\n{summary}";
     }
 
     /// <summary>All valid task keys, for counterbalancing / iteration by a controller.</summary>
     public IReadOnlyCollection<string> TaskKeys => TASK_BLOCKS.Keys;
 
+    // =========================================================================
+    //  Which task the session is currently on
+    // =========================================================================
+
+    /// <summary>0 while the participant is on the first task, 1 once it has moved to the second.</summary>
+    public int CurrentTaskIndex { get; private set; }
+
     /// <summary>
-    /// Switch the task on a LIVE session. Dynamic variables are read only at conversation
-    /// initiation, so changing the task requires a fresh conversation: this applies the new
-    /// task, disconnects, and reconnects. Each call starts a brand-new conversation with no
-    /// carried-over history. No-op if the key is unknown.
+    /// The key of the task the participant is working on NOW. This is what TaskPanel follows, so
+    /// the sheet and the conversation cannot drift onto different tasks.
     /// </summary>
-    public async void RestartWithTask(string key)
+    public string CurrentTaskKey => CurrentTaskIndex == 1 ? secondTaskKey : firstTaskKey;
+
+    /// <summary>Raised when the session moves to the second task. Argument is the new current key.</summary>
+    public event Action<string> OnTaskAdvanced;
+
+    /// <summary>
+    /// Move the session from the first task to the second. Fired automatically when the agent
+    /// speaks its scripted hand-over line (see taskSwitchPhrases), and safe to call by hand — wire
+    /// it to a researcher button if the agent's wording ever drifts past the matcher.
+    ///
+    /// This does NOT touch the conversation: the agent was given both tasks at initiation and is
+    /// the one driving the hand-over. All that changes here is which task the study considers
+    /// current, i.e. which sheet the participant sees and what the log attributes to.
+    ///
+    /// Idempotent: returns false if there is no second task or the session is already on it.
+    /// </summary>
+    public bool AdvanceToSecondTask()
     {
-        if (!SetTaskByKey(key)) return;
+        if (CurrentTaskIndex == 1) return false;
+
+        if (string.IsNullOrEmpty(secondTaskKey))
+        {
+            Debug.LogWarning("ElevenLabsConnection: AdvanceToSecondTask() but no second task is set.");
+            return false;
+        }
+
+        CurrentTaskIndex = 1;
+        Debug.Log($"ElevenLabsConnection: advanced to the SECOND task '{secondTaskKey}'.");
+        OnTaskAdvanced?.Invoke(secondTaskKey);
+        return true;
+    }
+    private void CheckTaskSwitchPhrase(string agentText)
+    {
+        if (!switchTaskOnPhrase) return;
+        if (CurrentTaskIndex == 1) return;              // already moved on; nothing to match
+        if (string.IsNullOrEmpty(agentText)) return;
+        if (taskSwitchPhrases == null || taskSwitchPhrases.Length == 0) return;
+
+        string haystack = NormalizeForMatch(agentText);
+        if (haystack.Length == 0) return;
+
+        foreach (string phrase in taskSwitchPhrases)
+        {
+            if (string.IsNullOrEmpty(phrase)) continue;
+            string needle = NormalizeForMatch(phrase);
+            if (needle.Length == 0 || !haystack.Contains(needle)) continue;
+
+            Debug.Log($"ElevenLabsConnection: task-switch phrase '{phrase}' heard in the agent's " +
+                      "transcript — moving to the second task.");
+            AdvanceToSecondTask();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Strip everything that carries no meaning for the match: whitespace, and the ASCII and
+    /// full-width punctuation the model sprinkles differently every time. Letters, digits and
+    /// CJK survive.
+    /// </summary>
+    private static string NormalizeForMatch(string s)
+    {
+        var sb = new StringBuilder(s.Length);
+        foreach (char c in s)
+        {
+            if (char.IsWhiteSpace(c) || char.IsPunctuation(c) || char.IsSymbol(c)) continue;
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Restart the conversation with a new task PAIR. Dynamic variables are read only at
+    /// initiation, so changing them requires a fresh conversation: this applies the new keys,
+    /// disconnects, and reconnects, losing all history. Not used by the normal flow — the two
+    /// tasks of a session are handed over within ONE conversation.
+    /// </summary>
+    public async void RestartWithTasks(string firstKey, string secondKey)
+    {
+        firstTaskKey = firstKey;
+        secondTaskKey = secondKey;
+        CurrentTaskIndex = 0;
 
         if (ws != null)
         {
@@ -390,6 +498,11 @@ public class ElevenLabsConnection : MonoBehaviour
                         OnNewResponse?.Invoke();
                         OnTranscriptDone?.Invoke(agentText);
                         Debug.Log($"Agent said: {agentText}");
+
+                        // AFTER the transcript event, so the conversation log records the line
+                        // itself before the task-switch marker it triggers — the two land in
+                        // the order they actually happened.
+                        CheckTaskSwitchPhrase(agentText);
                     }
                     break;
 

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Meta.XR.MRUtilityKit;
 
 /// <summary>
@@ -9,12 +9,13 @@ using Meta.XR.MRUtilityKit;
 /// AgentVoice object anymore:
 ///
 ///   * AvatarPlacer          <- avatar variant, scale condition/value, placement, surface contact
-///   * ElevenLabsConnection  <- task (taskKey), selected here as an A..H dropdown
+///   * ElevenLabsConnection  <- the session's TWO tasks (firstTaskKey / secondTaskKey), each
+///                              selected here as a P1..P4 / I1..I4 dropdown
 ///   * ConversationLogger    -> READS participantId / conditionLabel from here (it pulls, so no
 ///                              ordering race — see ConversationLogger.Start)
 ///
 /// WHY PUSH IN Awake: AvatarPlacer reads its fields in the MRUK OnSceneLoaded callback and
-/// ElevenLabsConnection reads taskKey inside Connect() (fired from AvatarPlacer.SetupVoice) —
+/// ElevenLabsConnection reads its task keys inside Connect() (fired from AvatarPlacer.SetupVoice) —
 /// both happen well AFTER every Awake/Start, so applying once in Awake (with a very early
 /// execution order) guarantees the values are in place before anything reads them. The editor
 /// also exposes an "Apply To Scene Now" button for edit-time preview.
@@ -24,11 +25,15 @@ using Meta.XR.MRUtilityKit;
 ///     researcher edits, once per participant). It lives there because the launch menu displays
 ///     the id, and while the menu runs MR_Scene is not loaded — so the config has to originate
 ///     in the scene that boots first.
-///   * task <- the launch menu, chosen by the participant. Risk Level is a WITHIN-subjects
-///     factor, so each participant runs several tasks; choosing it at runtime is what removes
-///     the mid-session Android rebuild a per-task inspector change would need.
-/// Both are pulled in Awake, BEFORE Apply(), so the rest of this class is unchanged and still
-/// the only thing that talks to AvatarPlacer / ElevenLabsConnection.
+///
+/// THE TASKS ARE NOT PART OF THAT. A session runs a FIXED PAIR of tasks (First then Second)
+/// chosen here in the inspector, so changing the pair means an Android rebuild — the launch
+/// menu used to choose the task at runtime precisely to avoid that, and no longer does. If
+/// mid-session task changes are ever wanted back, the pair has to travel via StudySession and
+/// be pickable on the menu again.
+///
+/// The config is pulled in Awake, BEFORE Apply(), so the rest of this class is unchanged and
+/// still the only thing that talks to AvatarPlacer / ElevenLabsConnection.
 ///
 /// The inspector fields below are the DEV FALLBACK: with no session (i.e. MR_Scene opened
 /// directly in the editor) the scene runs entirely off them, so ordinary dev testing never has
@@ -44,18 +49,25 @@ using Meta.XR.MRUtilityKit;
 [DefaultExecutionOrder(-500)] // apply before AvatarPlacer / ConversationLogger read anything
 public class StudyControlPanel : MonoBehaviour
 {
-    /// <summary>The eight study tasks, in fixed A..H order. Maps to the taskKey strings used by
-    /// ElevenLabsConnection.TASK_BLOCKS and SwotPanel (low_A..low_D, high_E..high_H).</summary>
+    /// <summary>
+    /// The eight study tasks, in fixed order: four SWOT proposals (P1..P4, swot_chinese.md) then
+    /// four incident reports (I1..I4, incident_chinese.md). The enum name's prefix IS the taskKey
+    /// string used by ElevenLabsConnection.TASK_BLOCKS and TaskPanel.
+    ///
+    /// The earlier low_A..low_D small-money tasks were dropped when the task set was revised, so
+    /// every task here is one of the two current report types. Anything that hard-codes the old
+    /// keys (a saved override, an analysis script) will no longer resolve.
+    /// </summary>
     public enum StudyTask
     {
-        A_OfficeChairs,      // low_A
-        B_PrinterToner,      // low_B
-        C_CoffeeMachine,     // low_C
-        D_Whiteboards,       // low_D
-        E_ClientOnboarding,  // high_E
-        F_ExpansionPilot,    // high_F
-        G_SoftwareUpgrade,   // high_G
-        H_Partnership,       // high_H
+        P1_ClientOnboarding, // P1 — SWOT proposal
+        P2_ExpansionPilot,   // P2 — SWOT proposal
+        P3_SoftwareUpgrade,  // P3 — SWOT proposal
+        P4_Partnership,      // P4 — SWOT proposal
+        I1_PackagingInjury,  // I1 — incident report
+        I2_Ransomware,       // I2 — incident report
+        I3_ChemicalSpill,    // I3 — incident report
+        I4_DataBreach,       // I4 — incident report
     }
 
     [Header("Session Identity (written into every log)")]
@@ -68,13 +80,19 @@ public class StudyControlPanel : MonoBehaviour
              "auto-derive it from the Scale + Avatar conditions below (e.g. 'mini_femaletoon').")]
     public string conditionLabel = "";
 
-    [Header("Task")]
-    [Tooltip("DEV FALLBACK — do NOT set this per trial. In a real session the participant picks " +
-             "the task on the launch menu and it is written into this field at Awake. This value " +
-             "is used only when MR_Scene is opened directly, so a dev run has a task to play. " +
-             "Pushed to ElevenLabsConnection.taskKey, which feeds both the agent " +
-             "({{task_context}}) and the participant's SWOT panel.")]
-    public StudyTask task = StudyTask.A_OfficeChairs;
+    [Header("Tasks — TWO per session, in this order")]
+    [Tooltip("The task the participant does FIRST. Pushed to ElevenLabsConnection.firstTaskKey, " +
+             "which feeds the agent's {{first_task_context}} and is the sheet TaskPanel shows " +
+             "until the agent hands over.")]
+    public StudyTask firstTask = StudyTask.P1_ClientOnboarding;
+
+    [Tooltip("The task the participant does SECOND. Pushed to ElevenLabsConnection.secondTaskKey " +
+             "-> {{second_task_context}}. Both tasks are sent to the agent at the START of the " +
+             "one conversation; the agent moves the participant from one to the other, and the " +
+             "sheet follows when it says its scripted hand-over line.\n\n" +
+             "Set this to a DIFFERENT task from the first — the same task twice is warned about " +
+             "but not prevented.")]
+    public StudyTask secondTask = StudyTask.I1_PackagingInjury;
 
     [Header("Study Condition — Avatar")]
     [Tooltip("Which avatar variant this session uses (gender x render style). The matching prefab " +
@@ -128,27 +146,27 @@ public class StudyControlPanel : MonoBehaviour
 
     // ---- Derived values other components read directly ----
 
-    /// <summary>The taskKey string (low_A..high_H) for the selected task.</summary>
-    public string TaskKey => ToTaskKey(task);
+    /// <summary>The taskKey string (P1..P4, I1..I4) for the first task.</summary>
+    public string FirstTaskKey => ToTaskKey(firstTask);
+
+    /// <summary>The taskKey string for the second task.</summary>
+    public string SecondTaskKey => ToTaskKey(secondTask);
 
     /// <summary>Condition label to log: the explicit one if set, else auto-derived from the conditions.</summary>
     public string ResolvedConditionLabel =>
         string.IsNullOrEmpty(conditionLabel) ? AutoLabel() : conditionLabel;
 
+    /// <summary>
+    /// The taskKey for a task, taken from the part of the enum name before the underscore
+    /// (P3_SoftwareUpgrade -> "P3"). Derived rather than mapped in a switch so that adding or
+    /// renaming a task is a single edit to the enum and the key can never fall out of step with
+    /// it — the old hand-written switch was a second list to keep in sync.
+    /// </summary>
     public static string ToTaskKey(StudyTask t)
     {
-        switch (t)
-        {
-            case StudyTask.A_OfficeChairs:     return "low_A";
-            case StudyTask.B_PrinterToner:     return "low_B";
-            case StudyTask.C_CoffeeMachine:    return "low_C";
-            case StudyTask.D_Whiteboards:      return "low_D";
-            case StudyTask.E_ClientOnboarding: return "high_E";
-            case StudyTask.F_ExpansionPilot:   return "high_F";
-            case StudyTask.G_SoftwareUpgrade:  return "high_G";
-            case StudyTask.H_Partnership:      return "high_H";
-            default:                           return "";
-        }
+        string s = t.ToString();
+        int underscore = s.IndexOf('_');
+        return underscore > 0 ? s.Substring(0, underscore) : s;
     }
 
     private string AutoLabel()
@@ -158,7 +176,7 @@ public class StudyControlPanel : MonoBehaviour
     }
 
     /// <summary>True when this run came through Launch_Scene rather than opening MR_Scene directly.</summary>
-    public bool DrivenBySession => StudySession.HasConfig || StudySession.HasTask;
+    public bool DrivenBySession => StudySession.HasConfig;
 
     private void Awake()
     {
@@ -200,11 +218,6 @@ public class StudyControlPanel : MonoBehaviour
                       $"'{participantId}', condition='{ResolvedConditionLabel}'.");
         }
 
-        if (StudySession.HasTask)
-        {
-            task = StudySession.Task;
-            Debug.Log($"StudyControlPanel: task {task} came from the launch menu.");
-        }
     }
 
     /// <summary>
@@ -237,7 +250,14 @@ public class StudyControlPanel : MonoBehaviour
 
         if (connection != null)
         {
-            connection.taskKey = TaskKey;
+            connection.firstTaskKey = FirstTaskKey;
+            connection.secondTaskKey = SecondTaskKey;
+
+            if (firstTask == secondTask)
+            {
+                Debug.LogWarning($"StudyControlPanel: First Task and Second Task are both " +
+                    $"{firstTask}. The participant would be given the same scenario twice.");
+            }
         }
         else
         {
@@ -246,7 +266,8 @@ public class StudyControlPanel : MonoBehaviour
         }
 
         Debug.Log($"StudyControlPanel: applied — participant='{participantId}', condition='{ResolvedConditionLabel}', " +
-                  $"task={task} ('{TaskKey}'), avatar={avatarVariant}, scale={scaleCondition} ({avatarScale}).");
+                  $"tasks={firstTask} ('{FirstTaskKey}') then {secondTask} ('{SecondTaskKey}'), " +
+                  $"avatar={avatarVariant}, scale={scaleCondition} ({avatarScale}).");
     }
 
     private void ResolveRefs()

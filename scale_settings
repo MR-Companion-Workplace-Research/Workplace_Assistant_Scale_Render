@@ -1,17 +1,29 @@
 female human -> 0.85
 z ~ -0.11
-contact height offset ~ -0.415
+contact height offset ~
 horizontal padding ~ 0.008
 top surface ~ 0
+panel size: 0.5
+side: -0.17
+COUCH
 
 female mini -> 0.15
 all offset ~ 0
+panel size: 0.25
+side: 0
+STORAGE
 
 male human -> 0.85
 z ~ -0.11
 offset ~ -0.45
 horizontal padding ~ 0.008
 top surface ~ 0
+panel size: 0.5
+side: -0.17
+COUCH
 
 male mini -> 0.15
 all offset ~ 0
+panel size: 0.25
+side: 0
+STORAGE

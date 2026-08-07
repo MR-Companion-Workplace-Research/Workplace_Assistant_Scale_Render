@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -111,7 +111,8 @@ public class ConversationLogger : MonoBehaviour
         {
             r["participant"] = ParticipantId;
             r["condition"] = ConditionLabel;
-            r["task_key"] = connection != null ? connection.taskKey : "";
+            r["first_task_key"] = connection != null ? connection.firstTaskKey : "";
+            r["second_task_key"] = connection != null ? connection.secondTaskKey : "";
             r["device"] = SystemInfo.deviceModel;
             r["app_version"] = Application.version;
             r["file"] = jsonlPath;
@@ -186,6 +187,7 @@ public class ConversationLogger : MonoBehaviour
         connection.OnDisconnected   += HandleDisconnected;
         connection.OnUserTranscript += HandleUserTranscript;
         connection.OnTranscriptDone += HandleAgentTranscript;
+        connection.OnTaskAdvanced += HandleTaskAdvanced;
         connection.OnInterruption   += HandleInterruption;
         connection.OnError          += HandleError;
         connection.OnAudioDelta     += HandleAudioDelta;
@@ -204,6 +206,7 @@ public class ConversationLogger : MonoBehaviour
         connection.OnDisconnected   -= HandleDisconnected;
         connection.OnUserTranscript -= HandleUserTranscript;
         connection.OnTranscriptDone -= HandleAgentTranscript;
+        connection.OnTaskAdvanced -= HandleTaskAdvanced;
         connection.OnInterruption   -= HandleInterruption;
         connection.OnError          -= HandleError;
         connection.OnAudioDelta     -= HandleAudioDelta;
@@ -218,6 +221,18 @@ public class ConversationLogger : MonoBehaviour
 
     private void HandleUserTranscript(string text) =>
         Write("user_message", r => { r["speaker"] = "user"; r["text"] = text; });
+
+    /// <summary>
+    /// The agent handed the participant from the first task to the second. This is THE marker the
+    /// analysis needs to split one conversation into its two tasks, so it records both the moment
+    /// and which task is now current.
+    /// </summary>
+    private void HandleTaskAdvanced(string newKey) =>
+        Write("task_advanced", r =>
+        {
+            r["task_key"] = newKey;
+            r["task_index"] = connection != null ? connection.CurrentTaskIndex : 1;
+        });
 
     private void HandleAgentTranscript(string text) =>
         Write("agent_message", r => { r["speaker"] = "agent"; r["text"] = text; });
@@ -268,7 +283,8 @@ public class ConversationLogger : MonoBehaviour
                     r["conversation_id"] = m?["conversation_id"]?.ToString() ?? "unknown";
                     r["agent_output_format"] = m?["agent_output_audio_format"]?.ToString() ?? "unknown";
                     r["user_input_format"] = m?["user_input_audio_format"]?.ToString() ?? "unknown";
-                    r["task_key"] = connection != null ? connection.taskKey : "";
+                    r["first_task_key"] = connection != null ? connection.firstTaskKey : "";
+                    r["second_task_key"] = connection != null ? connection.secondTaskKey : "";
                 });
                 break;
             }
@@ -289,10 +305,10 @@ public class ConversationLogger : MonoBehaviour
 
     // =========================================================================
     //  Public API — call from other scripts to drop labelled markers into the log
-    //  (e.g. SwotPanel.ShowSwot, trial start/stop from ExperimenterRemoteTrigger).
+    //  (e.g. TaskPanel.ShowPanel, trial start/stop from ExperimenterRemoteTrigger).
     // =========================================================================
 
-    /// <summary>Write a free-form, timestamped marker (e.g. "swot_shown", "trial_start").</summary>
+    /// <summary>Write a free-form, timestamped marker (e.g. "panel_shown", "trial_start").</summary>
     public void LogMarker(string label, string detail = null) =>
         Write("marker", r => { r["label"] = label; if (detail != null) r["detail"] = detail; });
 
