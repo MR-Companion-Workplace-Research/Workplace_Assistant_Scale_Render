@@ -253,6 +253,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: female
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: d62125b476463c647aab21f308b520f6, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 0425df4358633e44a9cf42d76ee6c89a, type: 2}
     - target: {fileID: 6172768193715428586, guid: d62125b476463c647aab21f308b520f6, type: 3}
       propertyPath: m_Mesh
       value: 
